@@ -1284,6 +1284,140 @@ def simulate_rfi_impacts_monte_carlo(
     )
     return out, durations
 
+
+def rfi_manager_page() -> None:
+    st.title("RFI Manager")
+    st.caption("Create, track, and export RFIs. Stored locally in SQLite.")
+
+    ui_step("Step 1 — Add / edit RFIs", "Keep IDs stable. Due dates drive aging + impact simulations.")
+    rfis = list_rfis()
+    df = pd.DataFrame([dict(r) for r in rfis]) if rfis else pd.DataFrame(
+        columns=["id","project","subject","discipline","priority","status","due_date","probability","impact_days","risk_notes"]
+    )
+
+    # Friendly ordering
+    cols = [c for c in ["project","subject","discipline","priority","status","due_date","probability","impact_days","risk_notes","id"] if c in df.columns]
+    df = df[cols] if not df.empty else df
+
+    edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="rfi_mgr_editor")
+
+    ui_step("Step 2 — Save", "Only writes to SQLite when you click save.")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Save changes", use_container_width=True):
+            # Upsert by ID if present, else create new
+            for _, row in edited.iterrows():
+                rid = str(row.get("id","") or "").strip()
+                payload = {
+                    "project": row.get("project"),
+                    "subject": row.get("subject"),
+                    "discipline": row.get("discipline"),
+                    "priority": row.get("priority"),
+                    "status": row.get("status"),
+                    "due_date": row.get("due_date"),
+                    "probability": row.get("probability"),
+                    "impact_days": row.get("impact_days"),
+                    "risk_notes": row.get("risk_notes"),
+                }
+                # Skip completely blank rows
+                if not any(str(payload.get(k,"") or "").strip() for k in ["subject","project","discipline","priority","status","due_date"]):
+                    continue
+                if rid and any(str(r.get("id",""))==rid for r in rfis):
+                    update_rfi(rid, payload)
+                else:
+                    save_rfi(payload)
+            st.success("Saved RFIs.")
+            st.rerun()
+    with c2:
+        st.download_button(
+            "Download RFIs CSV",
+            data=edited.to_csv(index=False).encode("utf-8"),
+            file_name="rfis.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    ui_step("Step 3 — Aging snapshot", "See what’s overdue right now.")
+    if edited is None or edited.empty:
+        st.caption("No RFIs yet.")
+        return
+    # Compute aging
+    today = datetime.now(timezone.utc).date()
+    tmp = edited.copy()
+    tmp["due_date"] = tmp.get("due_date","").astype(str)
+    def _age(d):
+        try:
+            dd = datetime.fromisoformat(str(d)).date()
+            return (today - dd).days
+        except Exception:
+            return None
+    tmp["Days past due"] = tmp["due_date"].map(_age)
+    tmp["Overdue?"] = tmp["Days past due"].map(lambda x: "✅" if (x is not None and x>0) else "")
+    st.dataframe(_style_conflicts(tmp.sort_values(["Overdue?","Days past due"], ascending=[False, False])), use_container_width=True, hide_index=True)
+
+
+def aging_dashboard_page() -> None:
+    st.title("Aging Dashboard")
+    st.caption("Quick aging view for RFIs (and future submittals).")
+
+    rfis = pd.DataFrame([dict(r) for r in list_rfis()]) if list_rfis() else pd.DataFrame()
+    if rfis.empty:
+        st.info("No RFIs saved yet.")
+        return
+
+    today = datetime.now(timezone.utc).date()
+    rfis["due_date"] = rfis.get("due_date","").astype(str)
+    def _age(d):
+        try:
+            dd = datetime.fromisoformat(str(d)).date()
+            return (today - dd).days
+        except Exception:
+            return None
+    rfis["Days past due"] = rfis["due_date"].map(_age)
+    rfis["Overdue?"] = rfis["Days past due"].map(lambda x: "✅" if (x is not None and x>0) else "")
+    rfis["Status"] = rfis.get("status","").astype(str)
+
+    overdue_n = int((rfis["Overdue?"]=="✅").sum())
+    open_n = int((rfis["Status"].str.lower()!="closed").sum())
+    ui_kpis([
+        ("Open RFIs", str(open_n)),
+        ("Overdue RFIs", str(overdue_n)),
+        ("Max days overdue", str(int(pd.to_numeric(rfis["Days past due"], errors="coerce").fillna(0).max()))),
+    ])
+
+    st.markdown("---")
+    st.dataframe(_style_conflicts(rfis.sort_values(["Overdue?","Days past due"], ascending=[False, False])), use_container_width=True, hide_index=True)
+
+
+def settings_examples_page() -> None:
+    st.title("Settings & Examples")
+    st.caption("Templates, expected columns, and local-only notes.")
+
+    st.markdown("### Schedule CSV expected columns (minimum)")
+    st.code("TaskID, Task, Duration, Predecessors", language="text")
+
+    st.markdown("### Optional schedule columns (supported)")
+    st.code(
+        "Constraint Type, Constraint Date, Normal Cost/day, Crash Cost/day, Min Duration,\n"
+        "WBS, Area, Discipline, Activity Type, Crew, Quantity, Units, Units/day, Cost, Unit Cost, Labor $/hr, Equip $/day",
+        language="text",
+    )
+
+    # Minimal template downloads
+    sched_template = pd.DataFrame([
+        {"TaskID":"A","Task":"Start","Duration":0,"Predecessors":"","Constraint Type":"","Constraint Date":"","Normal Cost/day":0,"Crash Cost/day":0,"Min Duration":0},
+        {"TaskID":"B","Task":"Work","Duration":5,"Predecessors":"A","Constraint Type":"","Constraint Date":"","Normal Cost/day":1000,"Crash Cost/day":1500,"Min Duration":3},
+    ])
+    st.download_button("Download schedule template CSV", data=sched_template.to_csv(index=False).encode("utf-8"), file_name="schedule_template.csv", mime="text/csv", use_container_width=True)
+
+    rfi_template = pd.DataFrame([
+        {"project":"","subject":"Clarify steel detail","discipline":"Structural","priority":"High","status":"Open","due_date":"2026-03-15","probability":0.5,"impact_days":5,"risk_notes":""}
+    ])
+    st.download_button("Download RFI template CSV", data=rfi_template.to_csv(index=False).encode("utf-8"), file_name="rfi_template.csv", mime="text/csv", use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### Local storage")
+    st.write("FieldFlow stores everything in a local SQLite database on the Streamlit Cloud instance. No external storage is used.")
 def rfi_impacts_page() -> None:
     st.title("RFI Impacts")
     st.caption("Link RFIs to schedule activities, simulate overdue delays, recompute CPM, and save the impacted scenario locally.")
@@ -3335,6 +3469,7 @@ def saved_results_page() -> None:
     tab1, tab2, tab3, tab4 = st.tabs(["Schedule runs", "Submittal checks", "RFIs", "Cost estimates"])
 
     with tab1:
+        runs_f = list(runs)
         # Tag / kind filters
         run_meta = {r["id"]: _safe_json(r.get("meta_json")) for r in runs_f}
         all_tags = sorted({tag for mid, m in run_meta.items() for tag in _split_tags(m.get("tags"))})
