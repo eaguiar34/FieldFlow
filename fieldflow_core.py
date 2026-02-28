@@ -640,6 +640,21 @@ def _init_db() -> None:
         """
     )
 
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS feedback (
+            id TEXT PRIMARY KEY,
+            created_at TEXT,
+            name TEXT,
+            email TEXT,
+            category TEXT,
+            rating INTEGER,
+            message TEXT
+        )
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -648,25 +663,16 @@ _init_db()
 
 
 def render_sidebar(active_page: str) -> None:
-    # Sidebar header
-    try:
-        st.sidebar.image("assets/FieldFlow_logo.png", width=170)
-    except Exception:
-        pass
-    
+    """Single source of truth for sidebar controls.
 
-
-    # Global typography / layout tweaks
+    Note: The sidebar logo/header is injected from app.py CSS so it sits *above*
+    Streamlit's navigation. Keep this function focused on controls only.
+    """
+    # Global typography / layout tweaks (kept light; app.py handles most CSS)
     st.markdown(
         """
 <style>
-/* FieldFlow global typography */
-html, body, [class*="css"]  { font-size: 17px; }
-h1 { font-size: 2.2rem; }
-h2 { font-size: 1.6rem; }
-h3 { font-size: 1.25rem; }
-p, li { font-size: 1.02rem; }
-[data-testid="stSidebar"] * { font-size: 1.08rem; }
+/* Slightly larger metrics */
 div[data-testid="stMetricValue"] { font-size: 1.55rem; }
 div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
 </style>
@@ -674,11 +680,7 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
         unsafe_allow_html=True,
     )
 
-    # Logo at top
-
-    st.sidebar.title(APP_NAME)
-
-    st.sidebar.caption("This build saves locally (no Google/Microsoft login).")
+    st.sidebar.caption("Local-only build (SQLite). No external logins or file sync.")
 
     with st.sidebar.expander("Calendar settings", expanded=False):
         st.selectbox(
@@ -690,16 +692,13 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
             "Holiday dates (YYYY-MM-DD, separated by commas/new lines)",
             key="__ff_calendar_holidays__",
             height=100,
-            placeholder="2026-01-01\n2026-07-04\n2026-11-26",
+            placeholder="2026-01-01\\n2026-07-04\\n2026-11-26",
         )
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Pages**")
-    st.sidebar.write("Use the left nav (Streamlit pages) to switch tools.")
-
-    st.sidebar.markdown("---")
-    st.sidebar.caption(f"Page: {active_page}")
-
+    if st.sidebar.button("Purge session data", help="Clears computed results in this browser session."):
+        _reset_session_state()
+        st.sidebar.success("Session data cleared.")
 
 # -----------------------------
 # Storage API
@@ -3499,3 +3498,124 @@ def saved_results_page() -> None:
                     else:
                         st.caption("No CPM snapshot")
                 st.markdown("---")
+
+# ----------------------------
+# Feedback (local-only)
+# ----------------------------
+def save_feedback(name: str, email: str, category: str, rating: int, message: str) -> str:
+    """Persist a feedback entry to SQLite."""
+    _init_db()
+    fid = str(uuid.uuid4())
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO feedback (id, created_at, name, email, category, rating, message)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (fid, datetime.utcnow().isoformat(), name or "", email or "", category or "", int(rating or 0), message or ""),
+    )
+    conn.commit()
+    conn.close()
+    log_audit_event("create", "feedback", fid, "feedback", {"category": category, "rating": rating})
+    return fid
+
+
+def list_feedback(limit: int = 200) -> list[dict]:
+    """Return feedback rows newest-first."""
+    _init_db()
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, created_at, name, email, category, rating, message
+        FROM feedback
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (int(limit),),
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def delete_feedback(feedback_id: str) -> None:
+    _init_db()
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM feedback WHERE id = ?", (feedback_id,))
+    conn.commit()
+    conn.close()
+    log_audit_event("delete", "feedback", feedback_id, "feedback", {})
+
+
+# ----------------------------
+# RFI Manager UI (page-level)
+# ----------------------------
+def rfi_manager_page() -> None:
+    """CRUD UI for RFIs stored in SQLite (no external systems)."""
+    st.title("RFI Manager")
+    st.caption("Track RFIs locally, link them to activities, and analyze schedule impacts.")
+
+    _init_db()
+
+    tab_list, tab_new = st.tabs(["RFIs", "Create / Update"])
+
+    with tab_list:
+        rfis = list_rfis()
+        if not rfis:
+            st.info("No RFIs yet. Create one in the **Create / Update** tab.")
+        else:
+            df = pd.DataFrame(rfis)
+            # friendly ordering
+            cols = [c for c in ["rfi_id","title","status","discipline","assignee","date_opened","due_date","date_closed"] if c in df.columns]
+            st.dataframe(df[cols] if cols else df, use_container_width=True, hide_index=True)
+
+            sel = st.selectbox("Select RFI to view/edit", options=[""] + [r.get("rfi_id","") for r in rfis])
+            if sel:
+                r = next((x for x in rfis if x.get("rfi_id")==sel), None)
+                if r:
+                    st.subheader(f"RFI {sel}")
+                    st.write(r.get("title",""))
+                    st.write(r.get("description",""))
+                    c1,c2 = st.columns(2)
+                    with c1:
+                        if st.button("Delete RFI", type="secondary"):
+                            delete_rfi(sel)
+                            st.success("Deleted.")
+                            st.rerun()
+                    with c2:
+                        st.write("")
+
+    with tab_new:
+        existing = [r.get("rfi_id","") for r in list_rfis()]
+        mode = st.radio("Mode", ["Create new", "Update existing"], horizontal=True)
+        if mode == "Update existing" and existing:
+            rfi_id = st.selectbox("Choose RFI", options=existing)
+            current = next((x for x in list_rfis() if x.get("rfi_id")==rfi_id), {})
+        else:
+            rfi_id = st.text_input("RFI ID", value=f"RFI-{len(existing)+1:03d}")
+            current = {}
+
+        title = st.text_input("Title", value=current.get("title",""))
+        status = st.selectbox("Status", options=["Open","Answered","Closed"], index=["Open","Answered","Closed"].index(current.get("status","Open")) if current.get("status") in ["Open","Answered","Closed"] else 0)
+        discipline = st.text_input("Discipline (optional)", value=current.get("discipline",""))
+        assignee = st.text_input("Assignee (optional)", value=current.get("assignee",""))
+        due_date = st.text_input("Due date (YYYY-MM-DD, optional)", value=current.get("due_date",""))
+        desc = st.text_area("Description", value=current.get("description",""), height=140)
+
+        if st.button("Save RFI", type="primary"):
+            save_rfi(
+                {
+                    "rfi_id": rfi_id.strip(),
+                    "title": title.strip(),
+                    "status": status,
+                    "discipline": discipline.strip(),
+                    "assignee": assignee.strip(),
+                    "due_date": due_date.strip(),
+                    "description": desc.strip(),
+                }
+            )
+            st.success("Saved.")
+            st.rerun()
