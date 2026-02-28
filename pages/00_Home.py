@@ -68,17 +68,24 @@ st.subheader("What you can do here")
 f1, f2, f3, f4 = st.columns(4)
 with f1:
     st.markdown('<div class="ff-card"><b>Scheduling</b><br/><span class="ff-muted">Compute CPM, see critical path/float, crash to a target date, and compare scenarios.</span></div>', unsafe_allow_html=True)
-    st.page_link("pages/02_Schedule_What_Ifs.py", label="Schedule What-Ifs", width="stretch")
+    if st.button("Schedule What-Ifs", width="stretch", key="home_sched"):
+        st.session_state["__ff_workspace_tab__"] = "Schedule"
+        st.switch_page("pages/00_Workspace.py")
 with f2:
     st.markdown('<div class="ff-card"><b>RFIs</b><br/><span class="ff-muted">Track RFIs, run aging, bind to activities, and simulate schedule risk.</span></div>', unsafe_allow_html=True)
-    st.page_link("pages/03_RFI_Manager.py", label="RFI Manager", width="stretch")
+    if st.button("RFI Manager", width="stretch", key="home_rfi"):
+        st.session_state["__ff_workspace_tab__"] = "RFIs"
+        st.switch_page("pages/00_Workspace.py")
 with f3:
     st.markdown('<div class="ff-card"><b>Submittals</b><br/><span class="ff-muted">Compare spec vs submittal text, detect gaps, generate a register.</span></div>', unsafe_allow_html=True)
-    st.page_link("pages/01_Submittal_Checker.py", label="Submittal Checker", width="stretch")
+    if st.button("Submittal Checker", width="stretch", key="home_sub"):
+        st.session_state["__ff_workspace_tab__"] = "Schedule"
+        st.switch_page("pages/00_Workspace.py")
 with f4:
     st.markdown('<div class="ff-card"><b>Cost</b><br/><span class="ff-muted">Loaded cost curves, unit-cost estimating, production-rate labor+equipment.</span></div>', unsafe_allow_html=True)
-    st.page_link("pages/09_Cost_Estimator.py", label="Cost Estimator", width="stretch")
-
+    if st.button("Cost Estimator", width="stretch", key="home_cost"):
+        st.session_state["__ff_workspace_tab__"] = "Cost"
+        st.switch_page("pages/00_Workspace.py")
 st.markdown("---")
 
 st.subheader("A simple workflow")
