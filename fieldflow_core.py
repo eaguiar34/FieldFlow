@@ -640,20 +640,6 @@ def _init_db() -> None:
         """
     )
 
-    
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS feedback (
-            id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            name TEXT,
-            email TEXT,
-            category TEXT,
-            rating INTEGER,
-            message TEXT
-        )
-        """
-    )
     conn.commit()
     conn.close()
 
@@ -662,23 +648,34 @@ _init_db()
 
 
 def render_sidebar(active_page: str) -> None:
-    st.sidebar.markdown("## FieldFlow")
+
+    # Global typography / layout tweaks
+    st.markdown(
+        """
+<style>
+/* FieldFlow global typography */
+html, body, [class*="css"]  { font-size: 16px; }
+h1 { font-size: 2.2rem; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.25rem; }
+p, li { font-size: 1.02rem; }
+[data-testid="stSidebar"] * { font-size: 0.98rem; }
+div[data-testid="stMetricValue"] { font-size: 1.55rem; }
+div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+    # Logo at top
+    for p in LOGO_CANDIDATES:
+        if p.exists():
+            st.sidebar.image(str(p), use_container_width=True)
+            break
 
     st.sidebar.title(APP_NAME)
 
     st.sidebar.caption("This build saves locally (no Google/Microsoft login).")
-
-    
-    with st.sidebar.expander("Project context", expanded=True):
-        st.text_input("Project name", value=st.session_state.get("__ff_project_name__", ""), key="__ff_project_name__")
-        st.date_input("Project start date", value=st.session_state.get("__ff_project_start__", date.today()), key="__ff_project_start__")
-        st.text_input("Default cost region (optional)", value=st.session_state.get("__ff_cost_region__", ""), key="__ff_cost_region__")
-        st.button("Reset session (clears computed results)", key="__ff_reset__", help="Clears computed outputs stored in this browser session")
-        if st.session_state.get("__ff_reset__"):
-            for k in list(st.session_state.keys()):
-                if k.startswith("__") or k.startswith("sched_") or k.startswith("rfi_") or k.startswith("cost_") or k.startswith("var_"):
-                    st.session_state.pop(k, None)
-            st.rerun()
 
     with st.sidebar.expander("Calendar settings", expanded=False):
         st.selectbox(
@@ -692,7 +689,12 @@ def render_sidebar(active_page: str) -> None:
             height=100,
             placeholder="2026-01-01\n2026-07-04\n2026-11-26",
         )
-    
+
+    if st.sidebar.button("Purge session data"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.rerun()
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Pages**")
     st.sidebar.write("Use the left nav (Streamlit pages) to switch tools.")
@@ -704,41 +706,6 @@ def render_sidebar(active_page: str) -> None:
 # -----------------------------
 # Storage API
 # -----------------------------
-
-# -----------------------------
-# UI kit helpers
-# -----------------------------
-
-def ui_step(title: str, subtitle: str = "") -> None:
-    st.markdown(f"## {title}")
-    if subtitle:
-        st.caption(subtitle)
-
-
-def ui_kpis(items: List[Tuple[str, str]]) -> None:
-    cols = st.columns(len(items))
-    for c, (k, v) in zip(cols, items):
-        c.metric(k, v)
-
-
-def ui_status(kind: str, msg: str) -> None:
-    kind = (kind or "").lower()
-    if kind in {"ok", "success"}:
-        st.success(msg)
-    elif kind in {"warn", "warning"}:
-        st.warning(msg)
-    elif kind in {"error", "fail"}:
-        st.error(msg)
-    else:
-        st.info(msg)
-
-
-def ui_save_panel(default_name: str, default_tags: str = "", default_notes: str = "", key_prefix: str = "save") -> Dict[str, str]:
-    name = st.text_input("Name", value=default_name, key=f"{key_prefix}_name")
-    tags = st.text_input("Tags (comma separated)", value=default_tags, key=f"{key_prefix}_tags")
-    notes = st.text_area("Notes", value=default_notes, height=70, key=f"{key_prefix}_notes")
-    return {"name": name, "tags": tags, "notes": notes}
-
 
 
 def _utc_now_iso() -> str:
@@ -954,29 +921,6 @@ def save_cost_estimate(name: str, estimate_df: pd.DataFrame, details: Dict[str, 
     log_audit_event("save", "cost_estimate", eid, name, {"rows": int(len(estimate_df))})
     return eid
 
-
-
-def save_feedback(name: str = "", email: str = "", category: str = "Other", rating: int = 4, message: str = "") -> str:
-    fid = str(uuid.uuid4())
-    conn = _db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO feedback (id, created_at, name, email, category, rating, message) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (fid, _utc_now_iso(), name, email, category, int(rating), message),
-    )
-    conn.commit()
-    conn.close()
-    log_audit_event("save", "feedback", fid, category, {"rating": int(rating)})
-    return fid
-
-
-def list_feedback(limit: int = 100) -> List[sqlite3.Row]:
-    conn = _db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?", (int(limit),))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
 
 def list_cost_estimates() -> List[sqlite3.Row]:
     conn = _db()
@@ -1318,10 +1262,7 @@ def simulate_rfi_impacts_monte_carlo(
     return out, durations
 
 def rfi_impacts_page() -> None:
-    if st.session_state.get("__ff_embedded__"):
-        st.subheader("RFI Impacts")
-    else:
-        st.title("RFI Impacts")
+    st.title("RFI Impacts")
     st.caption("Link RFIs to schedule activities, simulate overdue delays, recompute CPM, and save the impacted scenario locally.")
 
     project_start = st.date_input("Project start date (used for constraint dates)", value=date.today(), key="proj_start_rfi")
@@ -1352,7 +1293,7 @@ def rfi_impacts_page() -> None:
     st.subheader("Schedule Table")
     edited = st.data_editor(
         base[[c for c in ["Task", "TaskID", "Duration", "Predecessors", "Start Delay", "Constraint Type", "Constraint Date"] if c in base.columns]],
-        width="stretch",
+        use_container_width=True,
         num_rows="dynamic",
         key="rfi_sched_editor",
     )
@@ -1365,10 +1306,10 @@ def rfi_impacts_page() -> None:
             st.success("No issues detected.")
         else:
             st.warning(f"Found {len(issues)} issue(s). Fix cycles before simulation.")
-            st.dataframe(pd.DataFrame(issues), width="stretch")
+            st.dataframe(pd.DataFrame(issues), use_container_width=True)
 
     # --- RFIs + linking ---
-    ui_step("Step 2 — Link RFIs", "Bind RFIs to activities and define delay rules.")
+    st.subheader("2) Select RFIs and link to activities")
     mode = st.radio(
         "Delay mode",
         options=["Deterministic (days)", "P50 (median)", "P80 (high confidence)", "Monte Carlo (risk)"],
@@ -1385,7 +1326,7 @@ def rfi_impacts_page() -> None:
     rfis_df = pd.DataFrame([dict(r) for r in rfis_rows])
     # Pretty columns
     display_cols = [c for c in ["id", "project", "subject", "discipline", "priority", "status", "due_date", "created_at"] if c in rfis_df.columns]
-    st.dataframe(rfis_df[display_cols], width="stretch", hide_index=True)
+    st.dataframe(rfis_df[display_cols], use_container_width=True, hide_index=True)
 
     today = st.date_input("Today (for overdue evaluation)", value=datetime.now().date(), key="rfi_today")
     today_dt = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
@@ -1519,7 +1460,7 @@ def rfi_impacts_page() -> None:
                 st.rerun()
 
     # --- Simulation ---
-    ui_step("Step 3 — Simulate & Save", "Run impacts, review float erosion, then save/export.")
+    st.subheader("3) Simulate & review")
     critical_mode_label = st.radio(
         "Critical path mode",
         options=["Total Float (Float = 0)", "Longest Path (driver chain)"],
@@ -1528,7 +1469,7 @@ def rfi_impacts_page() -> None:
     )
     critical_mode = "longest_path" if "Longest" in critical_mode_label else "total_float"
 
-    do_sim = st.button("Simulate impacts", width="stretch")
+    do_sim = st.button("Simulate impacts", use_container_width=True)
     if do_sim:
         if diag.get("has_cycle"):
             st.error("Cannot simulate: schedule has a cycle. Fix it first.")
@@ -1578,7 +1519,7 @@ def rfi_impacts_page() -> None:
         mc_dist = st.session_state.get("__rfi_mc_dist__")
         if mc_dist is not None and len(mc_dist):
             st.markdown("**Monte Carlo duration distribution (days):**")
-            st.dataframe(mc_dist, width="stretch", hide_index=True)
+            st.dataframe(mc_dist, use_container_width=True, hide_index=True)
 
         bdur = int(baseline["EF"].max())
         idur = int(impacted["EF"].max())
@@ -1601,7 +1542,7 @@ def rfi_impacts_page() -> None:
 
         if impact_log is not None and len(impact_log) > 0:
             st.subheader("Applied impacts (overdue RFIs only)")
-            st.dataframe(_style_conflicts(impact_log), width="stretch", hide_index=True)
+            st.dataframe(_style_conflicts(impact_log), use_container_width=True, hide_index=True)
             if impact_log is not None and not impact_log.empty:
                 st.caption("Impact log includes rule_type (fixed vs overdue_factor) and apply_as (start_delay vs snet_constraint).")
         else:
@@ -1617,11 +1558,11 @@ def rfi_impacts_page() -> None:
         merged["EF_delta"] = merged["EF_imp"] - merged["EF_base"]
         merged = merged.sort_values(["Float_delta", "EF_delta"], ascending=[True, False])
         st.subheader("Top float erosion (most negative ΔFloat)")
-        st.dataframe(merged.head(25), width="stretch")
+        st.dataframe(merged.head(25), use_container_width=True)
 
         st.subheader("Save this simulation")
         name = st.text_input("Run name", value=f"RFI Impact — {datetime.now().strftime('%Y-%m-%d %H:%M')}", key="rfi_run_name")
-        if st.button("Save simulation as a run (baseline + impacted)", width="stretch", key="rfi_save_run"):
+        if st.button("Save simulation as a run (baseline + impacted)", use_container_width=True, key="rfi_save_run"):
             meta = {
                 "kind": "rfi_impact",
                 "rfi_ids": st.session_state.get("__rfi_selected_ids__", []),
@@ -1802,7 +1743,7 @@ def submittal_checker_page() -> None:
                     kws=[k for k in _keyword_set(r) if k]
                     hits=sum(1 for k in kws if k in sub_kw_set)
                     rows.append({"Requirement": r, "Keywords": ", ".join(kws[:8]), "Covered?": "✅" if hits>=2 else "⚠️"})
-                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
                 dfreq = pd.DataFrame(rows)
                 st.download_button("Download requirements CSV", data=dfreq.to_csv(index=False).encode("utf-8"), file_name="required_submittals.csv", mime="text/csv")
@@ -1819,7 +1760,7 @@ def submittal_checker_page() -> None:
         
         st.markdown("---")
         st.subheader("Generate submittal register (from spec heuristics)")
-        if st.button("Generate submittal register rows", width="stretch"):
+        if st.button("Generate submittal register rows", use_container_width=True):
             reqs = last.get("required_submittals", []) if last else []
             rows=[]
             for r in (reqs or [])[:200]:
@@ -1836,7 +1777,7 @@ def submittal_checker_page() -> None:
             if rows:
                 ids = save_submittal_register(rows)
                 st.success(f"Inserted {len(ids)} rows into SQLite submittal_register.")
-                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
             else:
                 st.warning("No requirements detected to generate.")
         st.subheader("Save")
@@ -2575,15 +2516,12 @@ def _crash_to_target(df: pd.DataFrame, target: int, critical_mode: str = "total_
 
 
 def schedule_whatifs_page() -> None:
-    if st.session_state.get("__ff_embedded__"):
-        st.subheader("Schedule What-Ifs")
-    else:
-        st.title("Schedule What-Ifs")
+    st.title("Schedule What-Ifs")
     st.caption(
         "Upload/edit a schedule, compute CPM on demand, optionally crash to a target duration, then save results to local SQLite."
     )
 
-    project_start = st.date_input("Project start date (used for constraint dates)", value=st.session_state.get("__ff_project_start__", date.today()), key="proj_start_sched")
+    project_start = st.date_input("Project start date (used for constraint dates)", value=date.today(), key="proj_start_sched")
     use_finish_by = st.checkbox("Enforce must-finish-by date (shows negative float if violated)", value=False, key="use_finish_by")
     finish_by_date = st.date_input("Must finish by date", value=_add_workdays(project_start, 0, cal), key="proj_finish_by") if use_finish_by else None
     cal = _calendar_from_sidebar()
@@ -2607,10 +2545,10 @@ A sample CSV is available in **Settings & Examples**.
 """
         )
 
-    ui_step("Step 1 — Input schedule", "Upload or edit tasks. Then compute CPM or crash.")
+    st.subheader("Task Table")
     edited = st.data_editor(
         base[[c for c in ["Task", "TaskID", "Activity Type", "WBS", "Area", "Discipline", "Calendar", "Duration", "Predecessors", "Constraint Type", "Constraint Date", "Crew", "Units", "Units/day", "Quantity", "Normal Cost/day", "Crash Cost/day", "Min Duration"] if c in base.columns]],
-        width="stretch",
+        use_container_width=True,
         num_rows="dynamic",
         key="sched_editor",
     )
@@ -2623,7 +2561,7 @@ A sample CSV is available in **Settings & Examples**.
             st.success("No issues detected.")
         else:
             st.warning(f"Found {len(issues)} issue(s). Fixing cycles is required for CPM.")
-            st.dataframe(pd.DataFrame(issues), width="stretch")
+            st.dataframe(pd.DataFrame(issues), use_container_width=True)
 
     critical_mode_label = st.radio(
         "Critical path mode",
@@ -2635,9 +2573,9 @@ A sample CSV is available in **Settings & Examples**.
 
     c1, c2 = st.columns([1, 1])
     with c1:
-        do_cpm = st.button("Compute CPM", width="stretch")
+        do_cpm = st.button("Compute CPM", use_container_width=True)
     with c2:
-        clear = st.button("Clear results", width="stretch")
+        clear = st.button("Clear results", use_container_width=True)
 
     if clear:
         for k in ["__baseline__", "__baseline_mode__", "__crashed__", "__crash_plan__", "__crash_status__"]:
@@ -2660,7 +2598,7 @@ A sample CSV is available in **Settings & Examples**.
     baseline = st.session_state.get("__baseline__")
     if baseline is not None and not baseline.empty:
         st.markdown("---")
-        ui_step("Step 2 — Compute CPM", "Compute baseline CPM and critical chain.")
+        st.subheader("Baseline CPM")
 
         proj = int(baseline["EF"].max())
         if "EF Date" in baseline.columns:
@@ -2668,17 +2606,12 @@ A sample CSV is available in **Settings & Examples**.
         else:
             st.success(f"Baseline project duration: {proj} days")
 
-        ui_kpis([
-            ("Project duration (days)", str(proj)),
-            ("Calendar", str(getattr(cal, "name", ""))),
-            ("Critical tasks", str(int((baseline["Float"]==0).sum()) if "Float" in baseline.columns else 0)),
-        ])
         chain = _critical_chain_from_schedule(baseline, mode=critical_mode)
         if chain:
             chain_ids = " → ".join([c["TaskID"] for c in chain])
             st.markdown(f"**Ordered critical chain ({'Longest Path' if critical_mode=='longest_path' else 'Total Float'}):** {chain_ids}")
             with st.expander("Show chain with task names"):
-                st.dataframe(pd.DataFrame(chain), width="stretch")
+                st.dataframe(pd.DataFrame(chain), use_container_width=True)
 
             chains = _critical_chains(baseline, mode=critical_mode)
             if len(chains) > 1:
@@ -2693,7 +2626,7 @@ A sample CSV is available in **Settings & Examples**.
         else:
             crit_tbl = baseline[baseline["Critical_TF"] == True].copy()
         st.markdown("**Critical activities**")
-        st.dataframe(crit_tbl[["TaskID","Task","Duration","ES","EF","LS","LF","Float","Logic driver"]], width="stretch")
+        st.dataframe(crit_tbl[["TaskID","Task","Duration","ES","EF","LS","LF","Float","Logic driver"]], use_container_width=True)
 
         st.markdown("**Float table**")
         cols = ["TaskID","Task","Duration","ES","EF","LS","LF","Float","Logic driver"]
@@ -2705,10 +2638,10 @@ A sample CSV is available in **Settings & Examples**.
             ("Critical / zero float", "#fff2cc"),
         ])
 
-        st.dataframe(_style_conflicts(baseline[cols]), width="stretch")
+        st.dataframe(_style_conflicts(baseline[cols]), use_container_width=True)
 
         with st.expander("Full baseline table (debug)"):
-            st.dataframe(baseline, width="stretch")
+            st.dataframe(baseline, use_container_width=True)
 
         # Downloads
         
@@ -2719,7 +2652,7 @@ A sample CSV is available in **Settings & Examples**.
             try:
                 tp = _timephased_cost(baseline, l1, project_start, cal)
                 with st.expander("Time-phased weekly curve (Layer 1)"):
-                    st.dataframe(tp[["WeekLabel","Cost"]], width="stretch", hide_index=True)
+                    st.dataframe(tp[["WeekLabel","Cost"]], use_container_width=True, hide_index=True)
             except Exception:
                 pass
 
@@ -2728,11 +2661,11 @@ A sample CSV is available in **Settings & Examples**.
             data=baseline.drop(columns=[c for c in ["__driver_pred__","__driver_rel__","__driver_lag__"] if c in baseline.columns]).to_csv(index=False).encode("utf-8"),
             file_name="schedule_baseline.csv",
             mime="text/csv",
-            width="stretch",
+            use_container_width=True,
         )
 
         st.markdown("---")
-        ui_step("Step 3 — Crash & Save", "Optionally crash to a target, review changes, then save/export.")
+        st.subheader("Crash Advisor (crash to target)")
 
         target_kind = st.radio(
             "Target type",
@@ -2747,7 +2680,7 @@ A sample CSV is available in **Settings & Examples**.
         else:
             target = st.number_input("Target project duration (days)", min_value=0, value=max(0, proj), step=1, key="crash_target_days")
 
-        do_crash = st.button("Crash to target", width="stretch")
+        do_crash = st.button("Crash to target", use_container_width=True)
 
         if do_crash:
             if diag.get("has_cycle"):
@@ -2788,10 +2721,10 @@ A sample CSV is available in **Settings & Examples**.
                     "Finish date": f"{start_finish} → {end_finish}" if start_finish or end_finish else "(n/a)",
                     "Added cost (approx)": f"{total_cost:,.2f}",
                 }]
-                st.dataframe(pd.DataFrame(kpi_rows), width="stretch", hide_index=True)
+                st.dataframe(pd.DataFrame(kpi_rows), use_container_width=True, hide_index=True)
 
             with st.expander("Crash iteration log (what changed each step)"):
-                st.dataframe(pd.DataFrame(itlog), width="stretch", hide_index=True)
+                st.dataframe(pd.DataFrame(itlog), use_container_width=True, hide_index=True)
             if status.get("reason") == "already_meets_target":
                 st.info(status.get("message", ""))
             elif status.get("reason") != "target_met":
@@ -2816,16 +2749,16 @@ A sample CSV is available in **Settings & Examples**.
 
             if isinstance(plan_df, pd.DataFrame) and not plan_df.empty:
                 st.markdown("**Crash plan (minimum-cost heuristic)**")
-                st.dataframe(plan_df, width="stretch")
+                st.dataframe(plan_df, use_container_width=True)
                 st.caption(f"Total added cost (from Crash Cost/day slopes): {plan_df['Added cost'].sum():,.2f}")
 
-            st.dataframe(crashed[["TaskID","Task","Duration","ES","EF","LS","LF","Float","Logic driver"]], width="stretch")
+            st.dataframe(crashed[["TaskID","Task","Duration","ES","EF","LS","LF","Float","Logic driver"]], use_container_width=True)
             st.download_button(
                 "Download crashed CSV",
                 data=crashed.drop(columns=[c for c in ["__driver_pred__","__driver_rel__","__driver_lag__"] if c in crashed.columns]).to_csv(index=False).encode("utf-8"),
                 file_name="schedule_crashed.csv",
                 mime="text/csv",
-                width="stretch",
+                use_container_width=True,
             )
 
         st.markdown("---")
@@ -2834,8 +2767,8 @@ A sample CSV is available in **Settings & Examples**.
         with st.expander("Save"):
             run_name = st.text_input("Run name", value=f"Schedule run {datetime.now().strftime('%Y-%m-%d %H:%M')}")
             tags = st.text_input("Tags (comma separated)", value="", key="sched_run_tags")
-            save_baseline_only = st.button("Save baseline only", width="stretch")
-            save_both = st.button("Save baseline + crashed (if available)", width="stretch")
+            save_baseline_only = st.button("Save baseline only", use_container_width=True)
+            save_both = st.button("Save baseline + crashed (if available)", use_container_width=True)
 
             if save_baseline_only:
                 meta = {
@@ -2891,10 +2824,7 @@ If you need durable storage later, we can plug in a real database (Postgres/Supa
 
 
 def baseline_variance_page() -> None:
-    if st.session_state.get("__ff_embedded__"):
-        st.subheader("Baseline Variance")
-    else:
-        st.title("Baseline Variance")
+    st.title("Baseline Variance")
     st.caption("Compare a baseline schedule to a current schedule and see drift in dates/float. Local-only.")
 
     project_start = st.date_input("Project start date", value=date.today(), key="var_proj_start")
@@ -2914,7 +2844,7 @@ def baseline_variance_page() -> None:
     base = _normalize_cols(base_raw)
     cur = _normalize_cols(cur_raw)
 
-    do = st.button("Compute variance", width="stretch")
+    do = st.button("Compute variance", use_container_width=True)
     if do:
         if base.empty or cur.empty:
             st.error("Upload both baseline and current CSVs.")
@@ -2946,15 +2876,15 @@ def baseline_variance_page() -> None:
             dfv["EF_delta"] = dfv["EF_cur"] - dfv["EF_base"]
             dfv["Float_delta"] = dfv["Float_cur"] - dfv["Float_base"]
             st.subheader("Variance table")
-            st.dataframe(dfv.sort_values(["EF_delta","Float_delta"], ascending=[False, True]), width="stretch", hide_index=True)
+            st.dataframe(dfv.sort_values(["EF_delta","Float_delta"], ascending=[False, True]), use_container_width=True, hide_index=True)
 
-            st.download_button("Download variance CSV", data=dfv.to_csv(index=False).encode("utf-8"), file_name="baseline_variance.csv", mime="text/csv", width="stretch")
+            st.download_button("Download variance CSV", data=dfv.to_csv(index=False).encode("utf-8"), file_name="baseline_variance.csv", mime="text/csv", use_container_width=True)
 
             # Save as schedule run (baseline=baseline, crashed=current)
             with st.expander("Save this variance result"):
                 name = st.text_input("Name", value=f"Variance {datetime.now().strftime('%Y-%m-%d %H:%M')}", key="var_name")
                 tags = st.text_input("Tags (comma separated)", value="variance", key="var_tags")
-                if st.button("Save variance to SQLite", width="stretch"):
+                if st.button("Save variance to SQLite", use_container_width=True):
                     meta = {"kind": "variance", "calendar": cal.name, "project_start": str(project_start), "tags": tags}
                     rid = save_schedule_run(name=name, baseline_df=bsch, crashed_df=csch, meta=meta)
                     st.success(f"Saved: {rid}")
@@ -3025,40 +2955,37 @@ def _build_all_saved_results_zip() -> bytes:
 
 
 def cost_estimator_page() -> None:
-    if st.session_state.get("__ff_embedded__"):
-        st.subheader("Cost Estimator")
-    else:
-        st.title("Cost Estimator")
+    st.title("Cost Estimator")
     st.caption("Local-only cost estimation: (1) cost loading, (2) quantity × unit cost, (3) production-rate labor+equipment.")
 
-    project_start = st.date_input("Project start date (for time-phasing)", value=st.session_state.get("__ff_project_start__", date.today()), key="cost_proj_start")
+    project_start = st.date_input("Project start date (for time-phasing)", value=date.today(), key="cost_proj_start")
     cal = _calendar_from_sidebar()
 
-    ui_step("Step 1 — Input", "Load schedule and optional cost fields.")
+    st.markdown("### 1) Load or edit a schedule")
     up = st.file_uploader("Upload schedule CSV", type=["csv"], key="cost_sched_up")
     sched_raw = _load_schedule_csv(up)
     sched = _normalize_cols(sched_raw)
 
     sched = st.data_editor(
         sched[[c for c in ["Task","TaskID","WBS","Area","Discipline","Duration","Predecessors","Quantity","Units","Units/day","Crew","Hours/day","Cost","Unit Cost","Normal Cost/day","Labor $/hr","Equip $/day"] if c in sched.columns]],
-        width="stretch",
+        use_container_width=True,
         num_rows="dynamic",
         key="cost_sched_editor",
     )
     sched = _normalize_cols(sched)
 
     st.markdown("---")
-    ui_step("Step 2 — Cost book", "Maintain local unit costs (SQLite).")
+    st.markdown("### 2) Cost Book (unit costs)")
     book_rows = [dict(r) for r in list_cost_book()] if list_cost_book() else []
     book_df = pd.DataFrame(book_rows) if book_rows else pd.DataFrame(columns=["code","description","unit","unit_cost","region","notes"])
     book_df = st.data_editor(
         book_df[[c for c in ["code","description","unit","unit_cost","region","notes"] if c in book_df.columns]],
-        width="stretch",
+        use_container_width=True,
         num_rows="dynamic",
         key="cost_book_editor",
     )
 
-    if st.button("Save cost book to SQLite", width="stretch"):
+    if st.button("Save cost book to SQLite", use_container_width=True):
         for _, r in book_df.iterrows():
             code=str(r.get("code","")).strip()
             unit=str(r.get("unit","")).strip()
@@ -3068,17 +2995,17 @@ def cost_estimator_page() -> None:
         st.toast("Cost book saved.")
 
     st.markdown("---")
-    ui_step("Step 3 — Overrides", "Optional per-activity mapping and overrides.")
+    st.markdown("### 3) Activity cost mapping (optional overrides)")
     amap_rows = [dict(r) for r in list_activity_costs()] if list_activity_costs() else []
     amap = pd.DataFrame(amap_rows) if amap_rows else pd.DataFrame(columns=["task_id","cost_code","quantity","unit","unit_cost_override","fixed_cost_override","labor_rate_hr","equip_rate_day","hours_per_day","notes","rule_type"])
     amap = st.data_editor(
         amap[[c for c in ["task_id","cost_code","quantity","unit","unit_cost_override","fixed_cost_override","labor_rate_hr","equip_rate_day","hours_per_day","notes"] if c in amap.columns]],
-        width="stretch",
+        use_container_width=True,
         num_rows="dynamic",
         key="activity_costs_editor",
     )
 
-    if st.button("Save activity cost mappings to SQLite", width="stretch"):
+    if st.button("Save activity cost mappings to SQLite", use_container_width=True):
         for _, r in amap.iterrows():
             tid=str(r.get("task_id","")).strip()
             if not tid:
@@ -3098,8 +3025,8 @@ def cost_estimator_page() -> None:
         st.toast("Activity costs saved.")
 
     st.markdown("---")
-    ui_step("Step 4 — Compute & Save", "Compute cost layers, review, then save.")
-    do = st.button("Compute all 3 layers", width="stretch")
+    st.markdown("### Compute estimate")
+    do = st.button("Compute all 3 layers", use_container_width=True)
     if do:
         # Compute CPM for time-phasing (best-effort)
         try:
@@ -3130,15 +3057,15 @@ def cost_estimator_page() -> None:
         st.markdown("#### Layer 1: Cost loading by activity")
         out1 = sched[["TaskID","Task","Duration"]].copy()
         out1["Cost (L1)"] = l1.values
-        st.dataframe(out1, width="stretch", hide_index=True)
+        st.dataframe(out1, use_container_width=True, hide_index=True)
 
         if not cpm.empty:
             tp = _timephased_cost(cpm, l1, project_start, cal)
             st.markdown("**Time-phased (weekly) cost curve (Layer 1)**")
-            st.dataframe(tp[["WeekLabel","Cost"]], width="stretch", hide_index=True)
+            st.dataframe(tp[["WeekLabel","Cost"]], use_container_width=True, hide_index=True)
 
         st.markdown("#### Layer 2: Quantity × unit cost")
-        st.dataframe(l2df, width="stretch", hide_index=True)
+        st.dataframe(l2df, use_container_width=True, hide_index=True)
 
         st.markdown("#### Layer 3: Production-rate estimate (labor+equipment) + mismatch flags")
         st.caption("Legend")
@@ -3146,12 +3073,12 @@ def cost_estimator_page() -> None:
             ("Mismatch flagged", "#fff2cc"),
         ])
 
-        st.dataframe(_style_conflicts(l3df.sort_values(["Mismatch?","Implied duration"], ascending=[False, False])), width="stretch", hide_index=True)
+        st.dataframe(_style_conflicts(l3df.sort_values(["Mismatch?","Implied duration"], ascending=[False, False])), use_container_width=True, hide_index=True)
 
         st.markdown("---")
         st.subheader("Save estimate (SQLite)")
         est_name = st.text_input("Estimate name", value=f"Cost estimate {datetime.now().strftime('%Y-%m-%d %H:%M')}", key="cost_est_name")
-        if st.button("Save this estimate", width="stretch"):
+        if st.button("Save this estimate", use_container_width=True):
             # Save a compact combined table
             merged = sched[["TaskID","Task","WBS","Area","Discipline","Duration","Quantity","Units","Units/day","Crew","Hours/day"]].copy()
             merged["Cost (L1)"] = l1.values
@@ -3172,17 +3099,14 @@ def cost_estimator_page() -> None:
             eid = save_cost_estimate(est_name, merged, details, cpm_df=cpm)
             st.success(f"Saved: {eid}")
 
-            st.download_button("Download combined estimate CSV", data=merged.to_csv(index=False).encode("utf-8"), file_name="cost_estimate.csv", mime="text/csv", width="stretch")
-            st.download_button("Download details JSON", data=json.dumps(details, indent=2).encode("utf-8"), file_name="cost_estimate_details.json", mime="application/json", width="stretch")
+            st.download_button("Download combined estimate CSV", data=merged.to_csv(index=False).encode("utf-8"), file_name="cost_estimate.csv", mime="text/csv", use_container_width=True)
+            st.download_button("Download details JSON", data=json.dumps(details, indent=2).encode("utf-8"), file_name="cost_estimate_details.json", mime="application/json", use_container_width=True)
 
 def cost_rollups_compare_page() -> None:
-    if st.session_state.get("__ff_embedded__"):
-        st.subheader("Cost Rollups & Compare")
-    else:
-        st.title("Cost Rollups & Compare")
+    st.title("Cost Rollups & Compare")
     st.caption("Roll up costs by WBS/Area/Discipline, and compare two estimates (scope/schedule impact on cost). Local-only.")
 
-    project_start = st.date_input("Project start date (for time-phasing schedule comparisons)", value=st.session_state.get("__ff_project_start__", date.today()), key="cmp_proj_start")
+    project_start = st.date_input("Project start date (for time-phasing schedule comparisons)", value=date.today(), key="cmp_proj_start")
     cal = _calendar_from_sidebar()
 
     missing_mode = st.radio(
@@ -3224,8 +3148,8 @@ def cost_rollups_compare_page() -> None:
             cpm_b = _compute_schedule(b, project_start=project_start, calendar=cal)
             curve = _timephased_delta(cpm_a, a_cost, cpm_b, b_cost, project_start, cal)
             with st.expander("Weekly time-phased cost delta (Layer 1)", expanded=False):
-                st.dataframe(_style_weekly_delta(curve, top_n=10, min_abs=min_week_abs), width="stretch", hide_index=True)
-                st.download_button("Download weekly delta CSV", data=curve.to_csv(index=False).encode("utf-8"), file_name="weekly_cost_delta.csv", mime="text/csv", width="stretch")
+                st.dataframe(_style_weekly_delta(curve, top_n=10, min_abs=min_week_abs), use_container_width=True, hide_index=True)
+                st.download_button("Download weekly delta CSV", data=curve.to_csv(index=False).encode("utf-8"), file_name="weekly_cost_delta.csv", mime="text/csv", use_container_width=True)
         except Exception:
             pass
 
@@ -3248,8 +3172,8 @@ def cost_rollups_compare_page() -> None:
                 st.markdown("### What changed by activity")
                 show = comp[["TaskID","Task","WBS","Area","Discipline","Δ Cost (L1)","Δ Extended Cost","Δ Total (L+E)","Δ Best Available"]].copy()
                 show = show.sort_values("Δ Best Available", ascending=False)
-                st.dataframe(show.head(200), width="stretch", hide_index=True)
-                st.download_button("Download activity deltas CSV", data=show.to_csv(index=False).encode("utf-8"), file_name="estimate_activity_deltas.csv", mime="text/csv", width="stretch")
+                st.dataframe(show.head(200), use_container_width=True, hide_index=True)
+                st.download_button("Download activity deltas CSV", data=show.to_csv(index=False).encode("utf-8"), file_name="estimate_activity_deltas.csv", mime="text/csv", use_container_width=True)
 
                 # Weekly time-phased delta (saved estimates, Layer 1) if CPM snapshots exist
                 try:
@@ -3260,11 +3184,11 @@ def cost_rollups_compare_page() -> None:
                         costB = pd.to_numeric(b_df.get("Cost (L1)", 0), errors="coerce").fillna(0.0)
                         curve = _timephased_delta(cpmA, costA, cpmB, costB, project_start, cal)
                         st.markdown("### Weekly time-phased delta (saved estimates, Layer 1)")
-                        st.dataframe(_style_weekly_delta(curve, top_n=10, min_abs=min_week_abs), width="stretch", hide_index=True)
+                        st.dataframe(_style_weekly_delta(curve, top_n=10, min_abs=min_week_abs), use_container_width=True, hide_index=True)
                         top10 = curve.assign(AbsDelta=pd.to_numeric(curve["Delta"], errors="coerce").fillna(0).abs()).sort_values("AbsDelta", ascending=False).head(10)
                         st.markdown("**Top 10 weeks with biggest delta**")
-                        st.dataframe(top10[["WeekLabel","Cost_A","Cost_B","Delta","AbsDelta"]], width="stretch", hide_index=True)
-                        st.download_button("Download weekly delta CSV (saved estimates)", data=curve.to_csv(index=False).encode("utf-8"), file_name="weekly_cost_delta_saved_estimates.csv", mime="text/csv", width="stretch")
+                        st.dataframe(top10[["WeekLabel","Cost_A","Cost_B","Delta","AbsDelta"]], use_container_width=True, hide_index=True)
+                        st.download_button("Download weekly delta CSV (saved estimates)", data=curve.to_csv(index=False).encode("utf-8"), file_name="weekly_cost_delta_saved_estimates.csv", mime="text/csv", use_container_width=True)
                     else:
                         st.caption("Time-phased delta for saved estimates requires CPM snapshots (newly saved estimates include them).")
                 except Exception:
@@ -3277,7 +3201,7 @@ def cost_rollups_compare_page() -> None:
                     if grp in r.columns:
                         roll = r.groupby(grp, as_index=False)["Δ Best Available"].sum().sort_values("Δ Best Available", ascending=False)
                         with st.expander(f"{grp} rollup", expanded=False):
-                            st.dataframe(roll.head(200), width="stretch", hide_index=True)
+                            st.dataframe(roll.head(200), use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.markdown("### Option B: Compare two schedules right now (without saving estimates first)")
@@ -3288,7 +3212,7 @@ def cost_rollups_compare_page() -> None:
     with up2:
         b_up = st.file_uploader("Schedule B CSV", type=["csv"], key="schB_up")
 
-    if st.button("Compare schedules (Layer 1 cost impact)", width="stretch"):
+    if st.button("Compare schedules (Layer 1 cost impact)", use_container_width=True):
         a_raw = _load_schedule_csv(a_up)
         b_raw = _load_schedule_csv(b_up)
         a = _normalize_cols(a_raw)
@@ -3305,19 +3229,9 @@ def cost_rollups_compare_page() -> None:
             comp = _compare_estimate_dfs(a_df, b_df, missing_mode=missing_key)
             st.subheader("Total Layer 1 delta (B - A)")
             st.metric("Δ loaded cost", f"{float(comp['Δ Cost (L1)'].sum()):,.2f}")
-            st.dataframe(comp[["TaskID","Task","WBS","Area","Discipline","Δ Cost (L1)","Δ Best Available"]].sort_values("Δ Cost (L1)", ascending=False).head(200), width="stretch", hide_index=True)
+            st.dataframe(comp[["TaskID","Task","WBS","Area","Discipline","Δ Cost (L1)","Δ Best Available"]].sort_values("Δ Cost (L1)", ascending=False).head(200), use_container_width=True, hide_index=True)
 def saved_results_page() -> None:
     st.title("Saved Results")
-    st.caption("Quick links")
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        st.page_link("pages/02_Schedule_What_Ifs.py", label="Go to Schedule What-Ifs")
-    with c2:
-        st.page_link("pages/09_Cost_Estimator.py", label="Go to Cost Estimator")
-    with c3:
-        st.page_link("pages/10_Cost_Rollups_Compare.py", label="Go to Cost Compare")
-    st.markdown("---")
-
 
     # Compute a lightweight signature of DB content to invalidate cached ZIPs
     try:
@@ -3362,7 +3276,7 @@ def saved_results_page() -> None:
 
 
     st.markdown("### Export")
-    if st.button("Build ZIP of all saved results", width="stretch"):
+    if st.button("Build ZIP of all saved results", use_container_width=True):
         try:
             st.session_state["__export_zip__"] = _build_all_saved_results_zip()
             st.session_state["__export_zip_built_at__"] = _utc_now_iso()
@@ -3377,7 +3291,7 @@ def saved_results_page() -> None:
             data=st.session_state["__export_zip__"],
             file_name=f"fieldflow_saved_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
             mime="application/zip",
-            width="stretch",
+            use_container_width=True,
         )
 
     tab1, tab2, tab3, tab4 = st.tabs(["Schedule runs", "Submittal checks", "RFIs", "Cost estimates"])
@@ -3420,7 +3334,7 @@ def saved_results_page() -> None:
                 else:
                     a_idx = st.selectbox("Run A", options=list(range(len(runs_f))), format_func=lambda i: names[i], key="cmp_a")
                     b_idx = st.selectbox("Run B", options=list(range(len(runs_f))), format_func=lambda i: names[i], key="cmp_b")
-                    if st.button("Compare", width="stretch"):
+                    if st.button("Compare", use_container_width=True):
                         ra, rb = runs_f[a_idx], runs_f[b_idx]
                         a_df = pd.read_csv(io.StringIO(ra["baseline_csv"]))
                         b_df = pd.read_csv(io.StringIO(rb["baseline_csv"]))
@@ -3443,7 +3357,7 @@ def saved_results_page() -> None:
                             join["Float_B"] = join["Float_B"].fillna(np.nan)
                             join["Float_delta"] = join["Float_B"] - join["Float_A"]
                             st.markdown("**Top float erosion (most negative delta)**")
-                            st.dataframe(join.sort_values("Float_delta").head(15), width="stretch")
+                            st.dataframe(join.sort_values("Float_delta").head(15), use_container_width=True)
                         except Exception as e:
                             st.error(f"Compare failed: {e}")
 
@@ -3475,7 +3389,7 @@ def saved_results_page() -> None:
                         file_name=f"{r['name']}_baseline.csv".replace(' ', '_'),
                         mime='text/csv',
                         key=f"sr_dlb_{r['id']}",
-                        width="stretch",
+                        use_container_width=True,
                     )
                 with c2:
                     if r.get('crashed_csv'):
@@ -3485,10 +3399,10 @@ def saved_results_page() -> None:
                             file_name=f"{r['name']}_crashed.csv".replace(' ', '_'),
                             mime='text/csv',
                             key=f"sr_dlc_{r['id']}",
-                            width="stretch",
+                            use_container_width=True,
                         )
                     else:
-                        st.button('No crashed', disabled=True, key=f"sr_noc_{r['id']}", width="stretch")
+                        st.button('No crashed', disabled=True, key=f"sr_noc_{r['id']}", use_container_width=True)
                 with c3:
                     st.download_button(
                         'Download meta',
@@ -3496,10 +3410,10 @@ def saved_results_page() -> None:
                         file_name=f"{r['name']}_meta.json".replace(' ', '_'),
                         mime='application/json',
                         key=f"sr_meta_{r['id']}",
-                        width="stretch",
+                        use_container_width=True,
                     )
                 with c4:
-                    if st.button('Delete', key=f"sr_del_{r['id']}", width="stretch"):
+                    if st.button('Delete', key=f"sr_del_{r['id']}", use_container_width=True):
                         delete_schedule_run(r['id'])
                         st.rerun()
 
@@ -3509,7 +3423,7 @@ def saved_results_page() -> None:
                     file_name=f"{r['name']}_bundle.zip".replace(' ', '_'),
                     mime='application/zip',
                     key=f"sr_zip_{r['id']}",
-                    width="stretch",
+                    use_container_width=True,
                 )
                 st.markdown('---')
 
@@ -3531,10 +3445,10 @@ def saved_results_page() -> None:
                     file_name=f"{c['name']}_result.json".replace(' ', '_'),
                     mime='application/json',
                     key=f"sc_json_{c['id']}",
-                    width="stretch",
+                    use_container_width=True,
                 )
             with c2:
-                if st.button('Delete', key=f"sc_del_{c['id']}", width="stretch"):
+                if st.button('Delete', key=f"sc_del_{c['id']}", use_container_width=True):
                     delete_submittal_check(c['id'])
                     st.rerun()
             st.markdown('---')
@@ -3558,10 +3472,10 @@ def saved_results_page() -> None:
                     file_name=f"rfi_{r.get('id','')}.json",
                     mime='application/json',
                     key=f"rfi_json_{r.get('id','')}",
-                    width="stretch",
+                    use_container_width=True,
                 )
             with c2:
-                if st.button('Delete', key=f"rfi_del_{r.get('id','')}", width="stretch"):
+                if st.button('Delete', key=f"rfi_del_{r.get('id','')}", use_container_width=True):
                     delete_rfi(r.get('id',''))
                     st.rerun()
             st.markdown('---')
@@ -3578,12 +3492,12 @@ def saved_results_page() -> None:
                 st.caption(f"Saved: {e['created_at']}  |  ID: {e['id']}")
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    st.download_button("Download CSV", data=(e.get("estimate_csv") or "").encode("utf-8"), file_name=f"cost_estimate_{e['id']}.csv", mime="text/csv", width="stretch", key=f"estcsv_{e['id']}")
+                    st.download_button("Download CSV", data=(e.get("estimate_csv") or "").encode("utf-8"), file_name=f"cost_estimate_{e['id']}.csv", mime="text/csv", use_container_width=True, key=f"estcsv_{e['id']}")
                 with c2:
-                    st.download_button("Download JSON", data=(e.get("estimate_json") or "{}").encode("utf-8"), file_name=f"cost_estimate_{e['id']}.json", mime="application/json", width="stretch", key=f"estjson_{e['id']}")
+                    st.download_button("Download JSON", data=(e.get("estimate_json") or "{}").encode("utf-8"), file_name=f"cost_estimate_{e['id']}.json", mime="application/json", use_container_width=True, key=f"estjson_{e['id']}")
                 with c3:
                     if e.get("cpm_csv"):
-                        st.download_button("Download CPM CSV", data=(e.get("cpm_csv") or "").encode("utf-8"), file_name=f"cost_estimate_cpm_{e['id']}.csv", mime="text/csv", width="stretch", key=f"estcpm_{e['id']}")
+                        st.download_button("Download CPM CSV", data=(e.get("cpm_csv") or "").encode("utf-8"), file_name=f"cost_estimate_cpm_{e['id']}.csv", mime="text/csv", use_container_width=True, key=f"estcpm_{e['id']}")
                     else:
                         st.caption("No CPM snapshot")
                 st.markdown("---")
