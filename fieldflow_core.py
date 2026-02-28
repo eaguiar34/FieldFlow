@@ -681,12 +681,6 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
         unsafe_allow_html=True,
     )
 
-    # Logo at top
-    for p in LOGO_CANDIDATES:
-        if p.exists():
-            st.sidebar.image(str(p), width="stretch")
-            break
-
     st.sidebar.title(APP_NAME)
 
     st.sidebar.caption("This build saves locally (no Google/Microsoft login).")
@@ -703,11 +697,6 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
             height=100,
             placeholder="2026-01-01\n2026-07-04\n2026-11-26",
         )
-
-    if st.sidebar.button("Purge session data"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Pages**")
