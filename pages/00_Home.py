@@ -3,86 +3,58 @@ import fieldflow_core as core
 
 core.render_sidebar("Home")
 
-st.markdown(
-    '''
-<style>
-.ff-card {
-  border: 1px solid rgba(49, 51, 63, 0.15);
-  border-radius: 16px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.02);
-}
-.ff-muted { color: rgba(49, 51, 63, 0.65); }
-</style>
-''',
-    unsafe_allow_html=True,
-)
-
 st.title("FieldFlow")
-st.markdown("### CPM-grade schedule math + RFIs + submittals + cost — local-first.")
-st.markdown(
-    '<div class="ff-muted">Built for project controls workflows that need clarity and speed — without cloud storage, logins, or heavy infrastructure.</div>',
-    unsafe_allow_html=True,
+st.subheader("CPM-grade schedule math + RFIs + submittals + cost — local-first.")
+st.caption(
+    "Built for project controls workflows that need clarity and speed — without cloud storage, logins, or heavy infrastructure."
 )
 
-b1, b2, b3 = st.columns(3)
-with b1:
-    if st.button("Open Workspace", width="stretch"):
+c1, c2, c3 = st.columns(3)
+with c1:
+    if st.button("Open Workspace", use_container_width=True):
         st.switch_page("pages/00_Workspace.py")
-with b2:
-    if st.button("Saved Results", width="stretch"):
+with c2:
+    if st.button("Saved Results", use_container_width=True):
         st.switch_page("pages/06_Saved_Results.py")
-with b3:
-    if st.button("Leave Feedback", width="stretch"):
+with c3:
+    if st.button("Leave Feedback", use_container_width=True):
         st.switch_page("pages/12_Feedback.py")
 
 st.markdown("---")
 
-
-st.subheader("What you can do here")
-
-f1, f2, f3, f4 = st.columns(4)
-with f1:
-    st.markdown('<div class="ff-card"><b>Scheduling</b><br/><span class="ff-muted">Compute CPM, see critical path/float, crash to a target date, and compare scenarios.</span></div>', unsafe_allow_html=True)
-    if st.button("Open Scheduling", width="stretch", key="go_sched"):
-        st.session_state["__ff_workspace_tab__"] = "Schedule"
-        st.switch_page("pages/00_Workspace.py")
-with f2:
-    st.markdown('<div class="ff-card"><b>RFIs</b><br/><span class="ff-muted">Track RFIs, run aging, bind to activities, and simulate schedule risk.</span></div>', unsafe_allow_html=True)
-    if st.button("Open RFIs", width="stretch", key="go_rfi"):
-        st.session_state["__ff_workspace_tab__"] = "RFIs"
-        st.switch_page("pages/00_Workspace.py")
-with f3:
-    st.markdown('<div class="ff-card"><b>Submittals</b><br/><span class="ff-muted">Compare spec vs submittal text, detect gaps, generate a register.</span></div>', unsafe_allow_html=True)
-    if st.button("Open Submittals", width="stretch", key="go_submittals"):
+st.header("What you can do here")
+a, b, c, d = st.columns(4)
+with a:
+    st.markdown("""**Scheduling**  
+Compute CPM, see critical path/float, crash to target, and compare scenarios.""")
+    if st.button("Open Scheduling", key="home_sched"):
+        st.switch_page("pages/02_Schedule_What_Ifs.py")
+with b:
+    st.markdown("""**RFIs**  
+Track RFIs, run aging, bind to activities, and simulate schedule risk.""")
+    if st.button("Open RFIs", key="home_rfi"):
+        st.switch_page("pages/03_RFI_Manager.py")
+with c:
+    st.markdown("""**Submittals**  
+Compare spec vs submittal text, detect gaps, generate a register.""")
+    if st.button("Open Submittals", key="home_sub"):
         st.switch_page("pages/01_Submittal_Checker.py")
-with f4:
-    st.markdown('<div class="ff-card"><b>Cost</b><br/><span class="ff-muted">Loaded cost curves, unit-cost estimating, production-rate labor+equipment.</span></div>', unsafe_allow_html=True)
-    if st.button("Open Cost", width="stretch", key="go_cost"):
-        st.session_state["__ff_workspace_tab__"] = "Cost"
-        st.switch_page("pages/00_Workspace.py")
+with d:
+    st.markdown("""**Cost**  
+Loaded cost curves, unit-cost estimating, production-rate labor+equipment.""")
+    if st.button("Open Cost", key="home_cost"):
+        st.switch_page("pages/09_Cost_Estimator.py")
 
 st.markdown("---")
 
-st.subheader("A simple workflow")
-
+st.header("A simple workflow")
 w1, w2, w3 = st.columns(3)
 with w1:
-    st.markdown('<div class="ff-card"><b>1) Load data</b><br/><span class="ff-muted">Upload a schedule CSV, enter RFIs, paste spec/submittal text.</span></div>', unsafe_allow_html=True)
+    st.markdown("""**1) Load data**  
+Upload a schedule CSV, enter RFIs, paste spec/submittal text.""")
 with w2:
-    st.markdown('<div class="ff-card"><b>2) Compute</b><br/><span class="ff-muted">CPM + crash, RFI impacts, cost layers, and comparisons.</span></div>', unsafe_allow_html=True)
+    st.markdown("""**2) Compute**  
+CPM + crash, RFI impacts, cost layers, and comparisons.""")
 with w3:
-    st.markdown('<div class="ff-card"><b>3) Save & export</b><br/><span class="ff-muted">Save runs locally to SQLite and export CSV/JSON/ZIP.</span></div>', unsafe_allow_html=True)
-
-st.markdown("---")
-
-st.subheader("Learn & help")
-l1, l2, l3 = st.columns(3)
-with l1:
-    st.page_link("pages/11_About.py", label="About FieldFlow", width="stretch")
-with l2:
-    st.page_link("pages/05_Settings_and_Examples.py", label="Settings & Examples", width="stretch")
-with l3:
-    st.page_link("pages/12_Feedback.py", label="Leave Feedback", width="stretch")
-
-st.caption("FieldFlow runs local-only on this app instance (SQLite). No external logins or file sync.")
+    st.markdown("""**3) Save & export**  
+Save runs locally to SQLite and export CSV/JSON/ZIP.""")
