@@ -1,5 +1,4 @@
 import streamlit as st
-import fieldflow_core as core
 
 st.set_page_config(page_title="FieldFlow", page_icon="🛠️", layout="wide")
 
@@ -9,16 +8,10 @@ try:
 except Exception:
     pass
 
-# Sidebar (project context, calendar, etc.)
-core.render_sidebar("Home")
-
-st.title("FieldFlow")
-st.caption("Offline-first scheduling + submittals + RFIs + cost tools. Local SQLite only.")
-
 # Prefer modern navigation (lets us name the sidebar section 'FieldFlow' instead of 'app').
 if hasattr(st, "navigation") and hasattr(st, "Page"):
     pages = [
-        st.Page("app.py", title="Home", icon="🏠"),
+        st.Page("pages/00_Home.py", title="Home", icon="🏠"),
         st.Page("pages/01_Submittal_Checker.py", title="Submittal Checker", icon="📄"),
         st.Page("pages/02_Schedule_What_Ifs.py", title="Schedule What-Ifs", icon="🗓️"),
         st.Page("pages/03_RFI_Manager.py", title="RFI Manager", icon="❓"),
@@ -33,21 +26,5 @@ if hasattr(st, "navigation") and hasattr(st, "Page"):
     nav = st.navigation({"FieldFlow": pages})
     nav.run()
 else:
-    # Fallback for older Streamlit: keep the built-in /pages navigation.
-    st.info("Use the left navigation (pages) to open each tool.")
-
-    st.markdown(
-        """
-### What's here
-- Submittal Checker
-- Schedule What-Ifs
-- RFI Manager
-- Aging Dashboard
-- Settings & Examples
-- Saved Results
-- RFI Impacts
-- Baseline Variance
-- Cost Estimator
-- Cost Rollups Compare
-"""
-    )
+    st.title("FieldFlow")
+    st.info("Your Streamlit version does not support the new navigation API. Use the left sidebar 'Pages' list.")
