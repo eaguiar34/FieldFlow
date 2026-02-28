@@ -54,6 +54,13 @@ with c2:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
+# Hero banner (lightweight graphic)
+try:
+    st.image("assets/hero_banner.png", use_container_width=True)
+except Exception:
+    pass
+
+
 st.markdown("---")
 
 st.subheader("What you can do here")
