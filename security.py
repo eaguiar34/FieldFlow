@@ -81,7 +81,7 @@ def require_passcode() -> None:
 
     st.subheader("Access")
     pw = st.text_input("Enter passcode", type="password")
-    if st.button("Unlock", use_container_width=True):
+    if st.button("Unlock", width="stretch"):
         if pw == PASSCODE:
             st.session_state["_auth_ok"] = True
             try:
@@ -100,7 +100,7 @@ def purge_button() -> None:
     if st.sidebar.button(
         "Purge session data",
         help="Clears all cached variables, tokens, and uploaded file contents from this session.",
-        use_container_width=True,
+        width="stretch",
     ):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
