@@ -1,5 +1,88 @@
 from __future__ import annotations
 
+# -----------------------------
+# Enterprise UX helpers
+# -----------------------------
+
+def primary_action_bar(
+    title: str,
+    primary_label: str,
+    *,
+    secondary: list | None = None,
+    primary_help: str = "",
+    primary_disabled: bool = False,
+    compact: bool = False,
+) -> dict:
+    """Render a consistent action bar and return which actions were pressed.
+
+    secondary items: list of dicts with keys: label, key, help, disabled
+    """
+    secondary = secondary or []
+    st.markdown(
+        '''
+        <style>
+        .ff-actionbar { border: 1px solid rgba(49, 51, 63, 0.15); border-radius: 16px; padding: 12px 14px; }
+        .ff-actionbar h4 { margin: 0 0 6px 0; }
+        </style>
+        ''',
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<div class="ff-actionbar"><h4>{title}</h4></div>', unsafe_allow_html=True)
+    # Buttons row (rendered outside the div so Streamlit widgets work)
+    cols = st.columns([1] + [0.7]*len(secondary))
+    pressed = {"primary": False}
+    with cols[0]:
+        pressed["primary"] = st.button(primary_label, width="stretch", help=primary_help, disabled=primary_disabled)
+    for j, item in enumerate(secondary, start=1):
+        with cols[j]:
+            k = item.get("key") or f"secondary_{j}"
+            pressed[k] = st.button(
+                item.get("label","Action"),
+                width="stretch",
+                help=item.get("help",""),
+                disabled=bool(item.get("disabled", False)),
+                key=k,
+            )
+    return pressed
+
+
+@st.cache_resource(show_spinner=False)
+def _ff_get_embedding_model(model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+    """Load an embedding model once per process. Raises if unavailable."""
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    return SentenceTransformer(model_name)
+
+
+def try_get_embedding_model(model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+    """Best-effort model loader. Returns (model, error_message)."""
+    try:
+        model = _ff_get_embedding_model(model_name)
+        return model, ""
+    except Exception as e:
+        return None, str(e)
+
+
+def _cosine_sim(a, b) -> float:
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    na = float(np.linalg.norm(a))
+    nb = float(np.linalg.norm(b))
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+def semantic_coverage_score(requirement: str, submittal_chunks: list[str], model) -> float:
+    """Return max cosine similarity between requirement and any submittal chunk."""
+    if not requirement or not submittal_chunks:
+        return 0.0
+    # Encode requirement once, chunks in batch
+    emb_req = model.encode([requirement], normalize_embeddings=False)[0]
+    emb_chunks = model.encode(submittal_chunks, normalize_embeddings=False)
+    best = 0.0
+    for v in emb_chunks:
+        best = max(best, _cosine_sim(emb_req, v))
+    return float(best)
 import io
 import json
 import os
@@ -640,21 +723,6 @@ def _init_db() -> None:
         """
     )
 
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS feedback (
-            id TEXT PRIMARY KEY,
-            created_at TEXT,
-            name TEXT,
-            email TEXT,
-            category TEXT,
-            rating INTEGER,
-            message TEXT
-        )
-        """
-    )
-
     conn.commit()
     conn.close()
 
@@ -663,16 +731,25 @@ _init_db()
 
 
 def render_sidebar(active_page: str) -> None:
-    """Single source of truth for sidebar controls.
+    # Sidebar header
+    try:
+        st.sidebar.image("assets/FieldFlow_logo.png", width=170)
+    except Exception:
+        pass
+    
 
-    Note: The sidebar logo/header is injected from app.py CSS so it sits *above*
-    Streamlit's navigation. Keep this function focused on controls only.
-    """
-    # Global typography / layout tweaks (kept light; app.py handles most CSS)
+
+    # Global typography / layout tweaks
     st.markdown(
         """
 <style>
-/* Slightly larger metrics */
+/* FieldFlow global typography */
+html, body, [class*="css"]  { font-size: 17px; }
+h1 { font-size: 2.2rem; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.25rem; }
+p, li { font-size: 1.02rem; }
+[data-testid="stSidebar"] * { font-size: 1.08rem; }
 div[data-testid="stMetricValue"] { font-size: 1.55rem; }
 div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
 </style>
@@ -680,7 +757,11 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
         unsafe_allow_html=True,
     )
 
-    st.sidebar.caption("Local-only build (SQLite). No external logins or file sync.")
+    # Logo at top
+
+    st.sidebar.title(APP_NAME)
+
+    st.sidebar.caption("This build saves locally (no Google/Microsoft login).")
 
     with st.sidebar.expander("Calendar settings", expanded=False):
         st.selectbox(
@@ -692,13 +773,16 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
             "Holiday dates (YYYY-MM-DD, separated by commas/new lines)",
             key="__ff_calendar_holidays__",
             height=100,
-            placeholder="2026-01-01\\n2026-07-04\\n2026-11-26",
+            placeholder="2026-01-01\n2026-07-04\n2026-11-26",
         )
 
     st.sidebar.markdown("---")
-    if st.sidebar.button("Purge session data", help="Clears computed results in this browser session."):
-        _reset_session_state()
-        st.sidebar.success("Session data cleared.")
+    st.sidebar.markdown("**Pages**")
+    st.sidebar.write("Use the left nav (Streamlit pages) to switch tools.")
+
+    st.sidebar.markdown("---")
+    st.sidebar.caption(f"Page: {active_page}")
+
 
 # -----------------------------
 # Storage API
@@ -1667,8 +1751,11 @@ def _keyword_set(text: str) -> set:
 
 
 def submittal_checker_page() -> None:
-    st.title("Submittal Checker")
-    st.caption("Lightweight checker (no OCR / no external deps). Upload text files or paste content.")
+    if st.session_state.get("__ff_embedded__"):
+        st.subheader("Submittal Checker")
+    else:
+        st.title("Submittal Checker")
+    st.caption("Compare spec vs submittal text. Fast by default; optional semantic matching when enabled.")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -1683,9 +1770,19 @@ def submittal_checker_page() -> None:
     spec = spec_txt.strip() or _read_text_upload(spec_up)
     subm = sub_txt.strip() or _read_text_upload(sub_up)
 
-    analyze = st.button("Analyze")
+    # Optional AI semantic matching (enterprise-safe): falls back automatically
+    semantic_enabled = st.toggle("Semantic matching (AI)", value=False, help="Improves paraphrase detection. If unavailable, FieldFlow falls back to standard matching.")
 
-    if analyze:
+    actions = primary_action_bar(
+        "Actions",
+        "Analyze",
+        secondary=[
+            {"label": "Save result", "key": "save_submittal", "help": "Save the latest analysis to SQLite.", "disabled": st.session_state.get("__submittal_last__") is None},
+        ],
+        primary_help="Run the spec vs submittal analysis.",
+    )
+
+    if actions["primary"]:
         if not spec or not subm:
             st.error("Provide both spec and submittal text.")
             return
@@ -1717,6 +1814,13 @@ def submittal_checker_page() -> None:
         st.markdown("---")
         st.subheader("Results")
 
+        name = st.text_input("Name this submittal check", value=f"Submittal check {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+        if actions.get("save_submittal"):
+            payload = {"created_at": _utc_now_iso(), "name": name, "result": last}
+            cid = save_submittal_check(name=name, payload=payload)
+            st.success(f"Saved. ID: {cid}")
+
         m1, m2, m3 = st.columns(3)
         m1.metric("Spec words (approx)", str(max(1, last["spec_len"] // 5)))
         m2.metric("Submittal words (approx)", str(max(1, last["submittal_len"] // 5)))
@@ -1736,10 +1840,27 @@ def submittal_checker_page() -> None:
                 # Simple coverage check: line considered "covered" if >=2 keywords appear in submittal keyword set
                 sub_kw_set = set(last.get("overlap_keywords", [])) | set(last.get("extra_keywords", []))
                 rows=[]
+                # Prepare chunks for semantic coverage (submittal bullets + a couple text slices)
+                sub_chunks = (last.get("submittal_bullets") or [])[:120]
+                if subm:
+                    sub_chunks = sub_chunks + [subm[:1200], subm[1200:2400]]
+                model = None
+                model_err = ""
+                if semantic_enabled:
+                    model, model_err = try_get_embedding_model()
+                    if model is None:
+                        st.info("Semantic matching unavailable on this deployment — using standard matching.")
                 for r in reqs[:200]:
                     kws=[k for k in _keyword_set(r) if k]
                     hits=sum(1 for k in kws if k in sub_kw_set)
-                    rows.append({"Requirement": r, "Keywords": ", ".join(kws[:8]), "Covered?": "✅" if hits>=2 else "⚠️"})
+                    sem = 0.0
+                    if model is not None:
+                        try:
+                            sem = semantic_coverage_score(r, sub_chunks, model)
+                        except Exception:
+                            sem = 0.0
+                    covered = (hits>=2) or (sem>=0.55 if model is not None else False)
+                    rows.append({"Requirement": r, "Keywords": ", ".join(kws[:8]), "Semantic score": round(float(sem), 3), "Covered?": "Yes" if covered else "No"})
                 st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
                 dfreq = pd.DataFrame(rows)
@@ -1753,8 +1874,6 @@ def submittal_checker_page() -> None:
             st.markdown("**Extra terms in submittal**")
             st.write(last["extra_keywords"][:50] or "(none)")
 
-        st.markdown("---")
-        
         st.markdown("---")
         st.subheader("Generate submittal register (from spec heuristics)")
         if st.button("Generate submittal register rows", width="stretch"):
@@ -1777,16 +1896,6 @@ def submittal_checker_page() -> None:
                 st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
             else:
                 st.warning("No requirements detected to generate.")
-        st.subheader("Save")
-        name = st.text_input("Name this submittal check", value=f"Submittal check {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        if st.button("Save this result"):
-            payload = {
-                "created_at": _utc_now_iso(),
-                "name": name,
-                "result": last,
-            }
-            cid = save_submittal_check(name=name, payload=payload)
-            st.success(f"Saved. ID: {cid}")
 
 
         # -----------------------------
@@ -3498,124 +3607,3 @@ def saved_results_page() -> None:
                     else:
                         st.caption("No CPM snapshot")
                 st.markdown("---")
-
-# ----------------------------
-# Feedback (local-only)
-# ----------------------------
-def save_feedback(name: str, email: str, category: str, rating: int, message: str) -> str:
-    """Persist a feedback entry to SQLite."""
-    _init_db()
-    fid = str(uuid.uuid4())
-    conn = _db()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO feedback (id, created_at, name, email, category, rating, message)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (fid, datetime.utcnow().isoformat(), name or "", email or "", category or "", int(rating or 0), message or ""),
-    )
-    conn.commit()
-    conn.close()
-    log_audit_event("create", "feedback", fid, "feedback", {"category": category, "rating": rating})
-    return fid
-
-
-def list_feedback(limit: int = 200) -> list[dict]:
-    """Return feedback rows newest-first."""
-    _init_db()
-    conn = _db()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT id, created_at, name, email, category, rating, message
-        FROM feedback
-        ORDER BY created_at DESC
-        LIMIT ?
-        """,
-        (int(limit),),
-    )
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def delete_feedback(feedback_id: str) -> None:
-    _init_db()
-    conn = _db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM feedback WHERE id = ?", (feedback_id,))
-    conn.commit()
-    conn.close()
-    log_audit_event("delete", "feedback", feedback_id, "feedback", {})
-
-
-# ----------------------------
-# RFI Manager UI (page-level)
-# ----------------------------
-def rfi_manager_page() -> None:
-    """CRUD UI for RFIs stored in SQLite (no external systems)."""
-    st.title("RFI Manager")
-    st.caption("Track RFIs locally, link them to activities, and analyze schedule impacts.")
-
-    _init_db()
-
-    tab_list, tab_new = st.tabs(["RFIs", "Create / Update"])
-
-    with tab_list:
-        rfis = list_rfis()
-        if not rfis:
-            st.info("No RFIs yet. Create one in the **Create / Update** tab.")
-        else:
-            df = pd.DataFrame(rfis)
-            # friendly ordering
-            cols = [c for c in ["rfi_id","title","status","discipline","assignee","date_opened","due_date","date_closed"] if c in df.columns]
-            st.dataframe(df[cols] if cols else df, use_container_width=True, hide_index=True)
-
-            sel = st.selectbox("Select RFI to view/edit", options=[""] + [r.get("rfi_id","") for r in rfis])
-            if sel:
-                r = next((x for x in rfis if x.get("rfi_id")==sel), None)
-                if r:
-                    st.subheader(f"RFI {sel}")
-                    st.write(r.get("title",""))
-                    st.write(r.get("description",""))
-                    c1,c2 = st.columns(2)
-                    with c1:
-                        if st.button("Delete RFI", type="secondary"):
-                            delete_rfi(sel)
-                            st.success("Deleted.")
-                            st.rerun()
-                    with c2:
-                        st.write("")
-
-    with tab_new:
-        existing = [r.get("rfi_id","") for r in list_rfis()]
-        mode = st.radio("Mode", ["Create new", "Update existing"], horizontal=True)
-        if mode == "Update existing" and existing:
-            rfi_id = st.selectbox("Choose RFI", options=existing)
-            current = next((x for x in list_rfis() if x.get("rfi_id")==rfi_id), {})
-        else:
-            rfi_id = st.text_input("RFI ID", value=f"RFI-{len(existing)+1:03d}")
-            current = {}
-
-        title = st.text_input("Title", value=current.get("title",""))
-        status = st.selectbox("Status", options=["Open","Answered","Closed"], index=["Open","Answered","Closed"].index(current.get("status","Open")) if current.get("status") in ["Open","Answered","Closed"] else 0)
-        discipline = st.text_input("Discipline (optional)", value=current.get("discipline",""))
-        assignee = st.text_input("Assignee (optional)", value=current.get("assignee",""))
-        due_date = st.text_input("Due date (YYYY-MM-DD, optional)", value=current.get("due_date",""))
-        desc = st.text_area("Description", value=current.get("description",""), height=140)
-
-        if st.button("Save RFI", type="primary"):
-            save_rfi(
-                {
-                    "rfi_id": rfi_id.strip(),
-                    "title": title.strip(),
-                    "status": status,
-                    "discipline": discipline.strip(),
-                    "assignee": assignee.strip(),
-                    "due_date": due_date.strip(),
-                    "description": desc.strip(),
-                }
-            )
-            st.success("Saved.")
-            st.rerun()
