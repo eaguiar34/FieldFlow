@@ -17,7 +17,6 @@ if hasattr(st, "navigation") and hasattr(st, "Page"):
             "FieldFlow": [
                 st.Page("pages/00_Home.py", title="Home"),
                 st.Page("pages/00_Workspace.py", title="Workspace"),
-                st.Page("pages/01_Submittal_Checker.py", title="Submittal Checker"),
                 st.Page("pages/06_Saved_Results.py", title="Saved Results"),
             ],
             "Learn & Help": [
@@ -25,18 +24,9 @@ if hasattr(st, "navigation") and hasattr(st, "Page"):
                 st.Page("pages/12_Feedback.py", title="Leave Feedback"),
                 st.Page("pages/05_Settings_and_Examples.py", title="Settings & Examples"),
             ],
-            "Advanced": [
-                st.Page("pages/02_Schedule_What_Ifs.py", title="Schedule What-Ifs"),
-                st.Page("pages/08_Baseline_Variance.py", title="Baseline Variance"),
-                st.Page("pages/03_RFI_Manager.py", title="RFI Manager"),
-                st.Page("pages/07_RFI_Impacts.py", title="RFI Impacts"),
-                st.Page("pages/09_Cost_Estimator.py", title="Cost Estimator"),
-                st.Page("pages/10_Cost_Rollups_Compare.py", title="Cost Compare"),
-                st.Page("pages/04_Aging_Dashboard.py", title="Aging Dashboard"),
-            ],
         }
     )
     nav.run()
 else:
     st.title("FieldFlow")
-    st.caption("Your browser Streamlit version is using the classic /pages navigation in the sidebar.")
+    st.caption("Your Streamlit version is using the classic /pages navigation in the sidebar.")
