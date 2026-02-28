@@ -38,13 +38,6 @@ with b3:
 
 st.markdown("---")
 
-# Hero banner graphic (fixed width to avoid use_container_width warnings)
-try:
-    st.image("assets/hero_banner.png", width=1100)
-except Exception:
-    pass
-
-st.markdown("---")
 
 st.subheader("What you can do here")
 
