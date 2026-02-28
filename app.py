@@ -1,15 +1,23 @@
 import streamlit as st
 
-st.set_page_config(page_title="FieldFlow", page_icon="🛠️", layout="wide")
+st.set_page_config(page_title="FieldFlow", page_icon=None, layout="wide")
 
-# Top-left logo (Streamlit >=1.32). Keep it large like the old sidebar card.
-try:
-    st.logo("assets/FieldFlow_logo.png", size="large")
-except Exception:
-    try:
-        st.logo("assets/FieldFlow_logo.png")
-    except Exception:
-        pass
+
+st.markdown(
+    '''
+    <style>
+    /* Make text black everywhere */
+    html, body, [class*="css"]  { font-size: 17px; color: #000 !important; }
+    .stMarkdown, .stText, .stCaption, .stButton, label, p, span, div { color: #000 !important; }
+
+    /* Sidebar readability */
+    [data-testid="stSidebar"] * { font-size: 1.12rem; color: #000 !important; }
+    </style>
+    ''',
+    unsafe_allow_html=True,
+)
+
+
 
 if hasattr(st, "navigation") and hasattr(st, "Page"):
     nav = st.navigation(
