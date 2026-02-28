@@ -18,12 +18,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Small logo at top of page (main content)
-try:
-    st.image("assets/FieldFlow_logo.png", width=90)
-except Exception:
-    pass
-
 st.title("FieldFlow")
 st.markdown("### CPM-grade schedule math + RFIs + submittals + cost — local-first.")
 st.markdown(
@@ -44,9 +38,9 @@ with b3:
 
 st.markdown("---")
 
-# Hero banner graphic
+# Hero banner graphic (fixed width to avoid use_container_width warnings)
 try:
-    st.image("assets/hero_banner.png", use_container_width=True)
+    st.image("assets/hero_banner.png", width=1100)
 except Exception:
     pass
 
