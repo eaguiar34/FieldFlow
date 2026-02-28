@@ -3,22 +3,14 @@ import fieldflow_core as core
 
 core.render_sidebar("Home")
 
-# Basic lightweight "marketing-style" layout (no external assets needed)
 st.markdown(
     '''
 <style>
-/* Card styling */
 .ff-card {
   border: 1px solid rgba(49, 51, 63, 0.15);
   border-radius: 16px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.02);
-}
-.ff-hero {
-  border: 1px solid rgba(49, 51, 63, 0.15);
-  border-radius: 20px;
-  padding: 22px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.0));
 }
 .ff-muted { color: rgba(49, 51, 63, 0.65); }
 </style>
@@ -26,40 +18,37 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown('<div class="ff-hero">', unsafe_allow_html=True)
+# Small logo at top of page (main content)
+try:
+    st.image("assets/FieldFlow_logo.png", width=90)
+except Exception:
+    pass
 
-c1, c2 = st.columns([2, 1])
-with c1:
-    st.title("FieldFlow")
-    st.markdown("### CPM-grade schedule math + RFIs + submittals + cost — **local-first**.")
-    st.markdown(
-        '<div class="ff-muted">Built for project controls workflows that need clarity and speed — without cloud storage, logins, or heavy infrastructure.</div>',
-        unsafe_allow_html=True,
-    )
+st.title("FieldFlow")
+st.markdown("### CPM-grade schedule math + RFIs + submittals + cost — local-first.")
+st.markdown(
+    '<div class="ff-muted">Built for project controls workflows that need clarity and speed — without cloud storage, logins, or heavy infrastructure.</div>',
+    unsafe_allow_html=True,
+)
 
-    b1, b2, b3 = st.columns(3)
-    with b1:
-        st.page_link("pages/00_Workspace.py", label="Open Workspace", width="stretch")
-    with b2:
-        st.page_link("pages/06_Saved_Results.py", label="Saved Results", width="stretch")
-    with b3:
-        st.page_link("pages/12_Feedback.py", label="Leave Feedback", width="stretch")
+b1, b2, b3 = st.columns(3)
+with b1:
+    if st.button("Open Workspace", width="stretch"):
+        st.switch_page("pages/00_Workspace.py")
+with b2:
+    if st.button("Saved Results", width="stretch"):
+        st.switch_page("pages/06_Saved_Results.py")
+with b3:
+    if st.button("Leave Feedback", width="stretch"):
+        st.switch_page("pages/12_Feedback.py")
 
-with c2:
-    # Keep a clean brand mark in-page even if top-left logo isn't visible in some Streamlit versions
-    try:
-        st.image("assets/FieldFlow_logo.png", width=220)
-    except Exception:
-        pass
+st.markdown("---")
 
-st.markdown("</div>", unsafe_allow_html=True)
-
-# Hero banner (lightweight graphic)
+# Hero banner graphic
 try:
     st.image("assets/hero_banner.png", use_container_width=True)
 except Exception:
     pass
-
 
 st.markdown("---")
 
@@ -68,24 +57,24 @@ st.subheader("What you can do here")
 f1, f2, f3, f4 = st.columns(4)
 with f1:
     st.markdown('<div class="ff-card"><b>Scheduling</b><br/><span class="ff-muted">Compute CPM, see critical path/float, crash to a target date, and compare scenarios.</span></div>', unsafe_allow_html=True)
-    if st.button("Schedule What-Ifs", width="stretch", key="home_sched"):
+    if st.button("Open Scheduling", width="stretch", key="go_sched"):
         st.session_state["__ff_workspace_tab__"] = "Schedule"
         st.switch_page("pages/00_Workspace.py")
 with f2:
     st.markdown('<div class="ff-card"><b>RFIs</b><br/><span class="ff-muted">Track RFIs, run aging, bind to activities, and simulate schedule risk.</span></div>', unsafe_allow_html=True)
-    if st.button("RFI Manager", width="stretch", key="home_rfi"):
+    if st.button("Open RFIs", width="stretch", key="go_rfi"):
         st.session_state["__ff_workspace_tab__"] = "RFIs"
         st.switch_page("pages/00_Workspace.py")
 with f3:
     st.markdown('<div class="ff-card"><b>Submittals</b><br/><span class="ff-muted">Compare spec vs submittal text, detect gaps, generate a register.</span></div>', unsafe_allow_html=True)
-    if st.button("Submittal Checker", width="stretch", key="home_sub"):
-        st.session_state["__ff_workspace_tab__"] = "Schedule"
-        st.switch_page("pages/00_Workspace.py")
+    if st.button("Open Submittals", width="stretch", key="go_submittals"):
+        st.switch_page("pages/01_Submittal_Checker.py")
 with f4:
     st.markdown('<div class="ff-card"><b>Cost</b><br/><span class="ff-muted">Loaded cost curves, unit-cost estimating, production-rate labor+equipment.</span></div>', unsafe_allow_html=True)
-    if st.button("Cost Estimator", width="stretch", key="home_cost"):
+    if st.button("Open Cost", width="stretch", key="go_cost"):
         st.session_state["__ff_workspace_tab__"] = "Cost"
         st.switch_page("pages/00_Workspace.py")
+
 st.markdown("---")
 
 st.subheader("A simple workflow")
