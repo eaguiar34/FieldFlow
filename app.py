@@ -11,11 +11,11 @@ except Exception:
     except Exception:
         pass
 
-# Navigation (preferred). If not supported, Streamlit will fall back to /pages.
 if hasattr(st, "navigation") and hasattr(st, "Page"):
     nav = st.navigation(
         {
             "FieldFlow": [
+                st.Page("pages/00_Home.py", title="Home"),
                 st.Page("pages/00_Workspace.py", title="Workspace"),
                 st.Page("pages/01_Submittal_Checker.py", title="Submittal Checker"),
                 st.Page("pages/06_Saved_Results.py", title="Saved Results"),
