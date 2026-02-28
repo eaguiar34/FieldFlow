@@ -650,10 +650,10 @@ _init_db()
 def render_sidebar(active_page: str) -> None:
     # Sidebar header
     try:
-        st.sidebar.image("assets/FieldFlow_logo.png", width=140)
+        st.sidebar.image("assets/FieldFlow_logo.png", width=170)
     except Exception:
         pass
-    st.sidebar.markdown("### FieldFlow")
+    
 
 
     # Global typography / layout tweaks
@@ -692,11 +692,6 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
             height=100,
             placeholder="2026-01-01\n2026-07-04\n2026-11-26",
         )
-
-    if st.sidebar.button("Purge session data"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Pages**")
