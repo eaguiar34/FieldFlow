@@ -1357,6 +1357,9 @@ def rfi_impacts_page() -> None:
         upload = st.file_uploader("Upload tasks CSV", type=["csv"], key="rfi_sched_up")
     with colB:
         runs = list_schedule_runs()
+        runs_f = list(runs)
+
+        runs = list_schedule_runs()
         run_choices = {f"{r['created_at'][:19]} — {r['name']}": r["id"] for r in runs}
         pick_run = st.selectbox("…or load from a saved schedule run (baseline)", options=["(none)"] + list(run_choices.keys()), index=0)
 
@@ -2677,11 +2680,19 @@ A sample CSV is available in **Settings & Examples**.
     critical_mode = "longest_path" if "Longest" in critical_mode_label else "total_float"
     show_dates = st.checkbox("Show calendar date columns (ES/EF/LS/LF)", value=True, key="sched_show_dates")
 
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        do_cpm = st.button("Compute CPM", width="stretch")
-    with c2:
-        clear = st.button("Clear results", width="stretch")
+    baseline = st.session_state.get("__baseline__")
+    actions = primary_action_bar(
+        "Actions",
+        "Compute CPM",
+        secondary=[
+            {"label": "Crash to target", "key": "do_crash", "help": "Crash activities to hit a target duration/date (if possible).", "disabled": baseline is None},
+            {"label": "Save run", "key": "do_save", "help": "Save baseline + crashed runs to SQLite.", "disabled": baseline is None},
+            {"label": "Clear", "key": "do_clear", "help": "Clear computed results."},
+        ],
+        primary_help="Compute CPM, critical path, float table, and early/late dates.",
+    )
+    do_cpm = actions["primary"]
+    clear = actions.get("do_clear")
 
     if clear:
         for k in ["__baseline__", "__baseline_mode__", "__crashed__", "__crash_plan__", "__crash_status__"]:
@@ -3010,6 +3021,9 @@ def _build_all_saved_results_zip() -> bytes:
     """
     buf = io.BytesIO()
     created = _utc_now_iso()
+
+    runs = list_schedule_runs()
+
 
     runs = list_schedule_runs()
     checks = list_submittal_checks()
@@ -3342,6 +3356,8 @@ def saved_results_page() -> None:
     # Compute a lightweight signature of DB content to invalidate cached ZIPs
     try:
         runs = list_schedule_runs()
+
+        runs = list_schedule_runs()
         checks = list_submittal_checks()
         rfis = list_rfis()
         sig = {
@@ -3607,3 +3623,36 @@ def saved_results_page() -> None:
                     else:
                         st.caption("No CPM snapshot")
                 st.markdown("---")
+
+def settings_examples_page() -> None:
+    """Settings and examples page (safe default)."""
+    if st.session_state.get("__ff_embedded__"):
+        st.subheader("Settings & Examples")
+    else:
+        st.title("Settings & Examples")
+
+    st.markdown("### Templates")
+    st.caption("Download sample CSV templates for schedules and cost inputs.")
+    ex_sched = pd.DataFrame(
+        [
+            {"TaskID": "A1", "Task": "Start", "Duration": 0, "Predecessors": "", "Normal Cost/day": 0},
+            {"TaskID": "A2", "Task": "Work", "Duration": 5, "Predecessors": "A1", "Normal Cost/day": 1200},
+            {"TaskID": "A3", "Task": "Finish", "Duration": 0, "Predecessors": "A2", "Normal Cost/day": 0},
+        ]
+    )
+    st.download_button(
+        "Download schedule template CSV",
+        data=ex_sched.to_csv(index=False).encode("utf-8"),
+        file_name="schedule_template.csv",
+        mime="text/csv",
+        width="stretch",
+    )
+
+    st.markdown("### Expected columns (Schedule)")
+    st.write("- TaskID, Task, Duration, Predecessors")
+    st.write("- Optional: WBS, Area, Discipline, Calendar, Activity Type")
+    st.write("- Cost: Cost, Normal Cost/day, Unit Cost, Quantity, Units/day, Crew, Labor $/hr, Equip $/day")
+
+    st.markdown("---")
+    st.markdown("### Tips")
+    st.write("- Use Workspace to reduce copy/paste between Schedule ↔ RFIs ↔ Cost.")
