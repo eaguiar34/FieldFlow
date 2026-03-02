@@ -4,6 +4,12 @@ from __future__ import annotations
 # Enterprise UX helpers
 # -----------------------------
 
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+
 def primary_action_bar(
     title: str,
     primary_label: str,
@@ -97,10 +103,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, date
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
-
-import numpy as np
-import pandas as pd
-import streamlit as st
 
 def _safe_json(obj: object) -> Dict[str, object]:
     if obj is None:
