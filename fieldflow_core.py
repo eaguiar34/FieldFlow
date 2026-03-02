@@ -487,6 +487,42 @@ def log_audit_event(event_type: str, entity_type: str, entity_id: str | None, na
             "INSERT INTO audit_events (id, created_at, event_type, entity_type, entity_id, name, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (aid, _utc_now_iso(), str(event_type), str(entity_type), (str(entity_id) if entity_id else None), str(name), json.dumps(details or {}, ensure_ascii=False)),
         )
+
+        # App settings (small key/value store)
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT
+            )"""
+        )
+
+        # User feedback
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT,
+                name TEXT,
+                email TEXT,
+                rating INTEGER,
+                message TEXT,
+                page TEXT
+            )"""
+        )
+
+        # Demo requests
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS demo_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT,
+                name TEXT,
+                email TEXT,
+                company TEXT,
+                role TEXT,
+                phone TEXT,
+                message TEXT
+            )"""
+        )
         conn.commit()
         conn.close()
         return aid
@@ -1344,6 +1380,107 @@ def simulate_rfi_impacts_monte_carlo(
     )
     return out, durations
 
+def rfi_manager_page() -> None:
+    """CRUD page for RFIs (lightweight tracker)."""
+    st.header("RFI Manager")
+    st.caption("Track RFIs, status, due dates, and link them to schedule activities for impacts.")
+
+    rfis = list_rfis()
+    df = pd.DataFrame([dict(r) for r in rfis]) if rfis else pd.DataFrame()
+
+    with st.expander("Create new RFI", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            title = st.text_input("Title", key="rfi_new_title")
+            discipline = st.text_input("Discipline / Area (optional)", key="rfi_new_disc")
+            status = st.selectbox("Status", ["Open", "Pending", "Closed"], index=0, key="rfi_new_status")
+        with col2:
+            due = st.date_input("Due date (optional)", value=None, key="rfi_new_due")
+            owner = st.text_input("Owner (optional)", key="rfi_new_owner")
+            impact = st.number_input("Expected delay days (optional)", min_value=0, value=0, step=1, key="rfi_new_delay")
+
+        notes = st.text_area("Notes (optional)", key="rfi_new_notes")
+        if st.button("Add RFI", type="primary"):
+            payload = {
+                "title": title.strip(),
+                "discipline": discipline.strip(),
+                "status": status,
+                "due_date": due.isoformat() if due else None,
+                "owner": owner.strip(),
+                "delay_days": int(impact),
+                "notes": notes.strip(),
+            }
+            if not payload["title"]:
+                st.error("Title is required.")
+            else:
+                save_rfi(payload)
+                st.success("RFI added.")
+                st.rerun()
+
+    st.subheader("Current RFIs")
+    if df.empty:
+        st.info("No RFIs yet. Add one above.")
+        return
+
+    show_cols = [c for c in ["id", "title", "status", "discipline", "due_date", "owner", "delay_days"] if c in df.columns]
+    st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
+
+    st.subheader("Edit / Delete")
+    selected = st.selectbox(
+        "Select RFI",
+        options=df["id"].tolist(),
+        format_func=lambda rid: f"{rid} — {df.loc[df['id']==rid,'title'].iloc[0]}",
+    )
+    row = df[df["id"] == selected].iloc[0].to_dict()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        new_title = st.text_input("Title", value=row.get("title", ""), key="rfi_edit_title")
+        st_list = ["Open", "Pending", "Closed"]
+        new_status = st.selectbox(
+            "Status",
+            st_list,
+            index=st_list.index(row.get("status", "Open")) if row.get("status") in st_list else 0,
+            key="rfi_edit_status",
+        )
+        new_disc = st.text_input("Discipline / Area", value=row.get("discipline", "") or "", key="rfi_edit_disc")
+    with col2:
+        due_val = None
+        try:
+            from datetime import date as _date
+            due_val = _date.fromisoformat(row["due_date"]) if row.get("due_date") else None
+        except Exception:
+            due_val = None
+        new_due = st.date_input("Due date", value=due_val, key="rfi_edit_due")
+        new_owner = st.text_input("Owner", value=row.get("owner", "") or "", key="rfi_edit_owner")
+        new_delay = st.number_input(
+            "Delay days", min_value=0, value=int(row.get("delay_days") or 0), step=1, key="rfi_edit_delay"
+        )
+    new_notes = st.text_area("Notes", value=row.get("notes", "") or "", key="rfi_edit_notes")
+
+    colA, colB = st.columns([1, 1])
+    with colA:
+        if st.button("Save changes", type="primary"):
+            updates = {
+                "title": new_title.strip(),
+                "status": new_status,
+                "discipline": new_disc.strip(),
+                "due_date": new_due.isoformat() if new_due else None,
+                "owner": new_owner.strip(),
+                "delay_days": int(new_delay),
+                "notes": new_notes.strip(),
+            }
+            update_rfi(selected, updates)
+            st.success("Updated.")
+            st.rerun()
+    with colB:
+        if st.button("Delete RFI", type="secondary"):
+            delete_rfi(selected)
+            st.warning("Deleted.")
+            st.rerun()
+
+
+
 def rfi_impacts_page() -> None:
     st.title("RFI Impacts")
     st.caption("Link RFIs to schedule activities, simulate overdue delays, recompute CPM, and save the impacted scenario locally.")
@@ -1775,8 +1912,17 @@ def submittal_checker_page() -> None:
     spec = spec_txt.strip() or _read_text_upload(spec_up)
     subm = sub_txt.strip() or _read_text_upload(sub_up)
 
-    # Optional AI semantic matching (enterprise-safe): falls back automatically
-    semantic_enabled = st.toggle("Semantic matching (AI)", value=False, help="Improves paraphrase detection. If unavailable, FieldFlow falls back to standard matching.")
+    # Optional semantic matching (behind Settings feature flag)
+    global_sem = get_app_setting("enable_semantic", "0") == "1"
+    if global_sem:
+        semantic_enabled = st.toggle(
+            "Semantic matching (optional)",
+            value=True,
+            help="Uses optional sentence-transformers embeddings for paraphrase/similarity. If unavailable, FieldFlow falls back automatically.",
+        )
+    else:
+        semantic_enabled = False
+        st.caption("Semantic matching is disabled. Enable it in Settings & Examples → Feature flags (and install optional dependencies).")
 
     actions = primary_action_bar(
         "Actions",
