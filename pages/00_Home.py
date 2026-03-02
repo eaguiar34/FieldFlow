@@ -43,7 +43,8 @@ with d:
     st.markdown("""**Cost**  
 Loaded cost curves, unit-cost estimating, production-rate labor+equipment.""")
     if st.button("Open Cost", key="home_cost"):
-        st.switch_page("pages/09_Cost_Estimator.py")
+        st.session_state["__ff_workspace_tab__"] = "Cost"
+        st.switch_page("pages/00_Workspace.py")
 
 st.markdown("---")
 
