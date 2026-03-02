@@ -2,13 +2,6 @@ streamlit>=1.32
 pandas>=2.0
 numpy>=1.24
 requests>=2.31
-msal>=1.25
-
-# Google OAuth + Sheets/Drive
-google-auth>=2.22
-google-auth-oauthlib>=1.1
-google-api-python-client>=2.95
-gspread>=6.0
 
 # Docs/PDF parsing
 pypdf>=4.0
@@ -19,9 +12,10 @@ reportlab>=4.0
 rapidfuzz>=3.6
 rank-bm25>=0.2
 
-# Optional semantic embeddings (heavy, but used when enabled)
-sentence-transformers>=2.6
-scikit-learn>=1.3
+# Optional semantic embeddings (install only if you want embedding-based similarity)
+#   pip install -r requirements-optional-embeddings.txt
+
+# Optional semantic embeddings (enable via toggle)
 
 # Charts
 plotly>=5.18
@@ -31,3 +25,10 @@ python-dateutil>=2.8
 
 # Excel workbook creation
 openpyxl>=3.1
+
+# Optional (future): Microsoft/Google Drive integrations
+# msal>=1.25
+# google-auth>=2.22
+# google-auth-oauthlib>=1.1
+# google-api-python-client>=2.95
+# gspread>=6.0
