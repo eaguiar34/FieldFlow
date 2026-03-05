@@ -1,0 +1,5 @@
+# Optional embeddings stack for Semantic Matching feature flag
+# Install these only if you plan to enable "Semantic Matching" in Settings.
+sentence-transformers>=2.6
+# torch is pulled as a dependency on most platforms, but may require a platform-specific install:
+# https://pytorch.org/get-started/locally/
