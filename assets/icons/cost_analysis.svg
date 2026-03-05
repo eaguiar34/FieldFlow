@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Cost Analysis">
+  <defs>
+    <style>
+      .n{stroke:#0B1F3A;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .o{stroke:#F28C28;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .fn{fill:#0B1F3A;font-family:system-ui, -apple-system, Segoe UI, Roboto;font-weight:700}
+    </style>
+  </defs>
+  <!-- Coins -->
+  <ellipse cx="56" cy="110" rx="26" ry="10" class="n"/>
+  <path d="M30 110v22c0 6 12 10 26 10s26-4 26-10v-22" class="n"/>
+  <text x="56" y="118" text-anchor="middle" font-size="22" class="fn">$</text>
+
+  <ellipse cx="112" cy="104" rx="28" ry="11" class="n"/>
+  <path d="M84 104v28c0 7 13 12 28 12s28-5 28-12v-28" class="n"/>
+  <text x="112" y="112" text-anchor="middle" font-size="22" class="fn">$</text>
+
+  <!-- Trend lines -->
+  <path d="M26 70l28 18l20-26l32 28l46-46" class="n"/>
+  <path d="M26 86l28 18l20-26l32 28l46-46" class="o"/>
+  <path d="M150 42l0 22l-22 0" class="n"/>
+</svg>

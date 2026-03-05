@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="CPM Scheduling">
+  <defs>
+    <style>
+      .n{stroke:#0B1F3A;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .o{stroke:#F28C28;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .f{fill:#0B1F3A}
+    </style>
+  </defs>
+  <!-- Calendar -->
+  <rect x="24" y="34" width="88" height="88" rx="14" class="n"/>
+  <line x1="24" y1="58" x2="112" y2="58" class="n"/>
+  <line x1="46" y1="24" x2="46" y2="44" class="n"/>
+  <line x1="90" y1="24" x2="90" y2="44" class="n"/>
+  <!-- Checkmarks -->
+  <path d="M44 78 l10 10 l18-22" class="o"/>
+  <path d="M44 106 l10 10 l18-22" class="o"/>
+  <!-- Gantt bars -->
+  <line x1="118" y1="78" x2="148" y2="78" class="n"/>
+  <line x1="118" y1="98" x2="140" y2="98" class="o"/>
+  <line x1="118" y1="118" x2="152" y2="118" class="n"/>
+</svg>

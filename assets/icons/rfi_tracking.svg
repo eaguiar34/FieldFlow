@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="RFI Tracking">
+  <defs>
+    <style>
+      .n{stroke:#0B1F3A;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .o{stroke:#F28C28;fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .fn{fill:#0B1F3A}
+      .fo{fill:#F28C28}
+    </style>
+  </defs>
+  <!-- Left bubble (question) -->
+  <path d="M24 46a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v22a22 22 0 0 1-22 22H60l-18 16v-16H46a22 22 0 0 1-22-22V46z" class="n"/>
+  <text x="66" y="68" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto" font-size="44" class="fn">?</text>
+
+  <!-- Right bubble (answer) -->
+  <path d="M64 86a22 22 0 0 1 22-22h40a22 22 0 0 1 22 22v20a22 22 0 0 1-22 22h-22l-18 16v-16h-0a22 22 0 0 1-22-22V86z" class="o"/>
+  <path d="M94 104 l12 12 l24-28" class="n"/>
+
+  <!-- Curved arrow -->
+  <path d="M52 118c10 16 26 24 44 24" class="n"/>
+  <path d="M92 132l14 10-16 6" class="n"/>
+</svg>
