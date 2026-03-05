@@ -767,16 +767,104 @@ def _init_db() -> None:
 
 _init_db()
 
+# -----------------------------
+# App settings (persisted)
+# -----------------------------
+def get_app_setting(key: str, default=None):
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM app_settings WHERE key = ? LIMIT 1", (key,))
+    row = cur.fetchone()
+    if not row:
+        return default
+    return row[0]
+
+
+def save_app_setting(key: str, value) -> None:
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, str(value)),
+    )
+    conn.commit()
+
+
+def load_app_settings_into_session() -> None:
+    """Load persisted app settings into st.session_state (safe to call repeatedly)."""
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute("SELECT key, value FROM app_settings")
+    for k, v in cur.fetchall():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+# -----------------------------
+# Feedback (persisted)
+# -----------------------------
+def save_feedback(name: str, email: str, message: str, page: str = "") -> int:
+    """Persist user feedback to SQLite. Returns inserted row id."""
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO feedback (created_at, name, email, message, page) VALUES (?, ?, ?, ?, ?)",
+        (_utc_now_iso(), name.strip(), email.strip(), message.strip(), page.strip()),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def list_feedback(limit: int = 200):
+    """Return feedback rows (newest first)."""
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, created_at, name, email, message, page FROM feedback ORDER BY id DESC LIMIT ?",
+        (int(limit),),
+    )
+    rows = cur.fetchall()
+    return [
+        {"id": r[0], "created_at": r[1], "name": r[2], "email": r[3], "message": r[4], "page": r[5]}
+        for r in rows
+    ]
+
+
+def delete_feedback(row_id: int) -> None:
+    conn = _db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM feedback WHERE id = ?", (int(row_id),))
+    conn.commit()
+
+
+# -----------------------------
+# Sidebar: calendar settings
+# -----------------------------
+def calendar_settings_ui() -> None:
+    """Sidebar UI for calendar/cost defaults."""
+    load_app_settings_into_session()
+    with st.sidebar.expander("Calendar settings", expanded=False):
+        week_start_default = st.session_state.get("calendar_week_start", "Mon")
+        week_start = st.selectbox(
+            "Week starts on",
+            options=["Mon", "Sun"],
+            index=0 if week_start_default == "Mon" else 1,
+            key="calendar_week_start",
+        )
+        region = st.text_input(
+            "Default cost region (optional)",
+            value=st.session_state.get("default_cost_region", ""),
+            key="default_cost_region",
+        )
+        if st.button("Save settings", key="save_calendar_settings", use_container_width=True):
+            save_app_setting("calendar_week_start", week_start)
+            save_app_setting("default_cost_region", region)
+            st.toast("Saved.", icon="✅")
+
+
 
 def render_sidebar(active_page: str) -> None:
-    # Sidebar header
-    try:
-        st.sidebar.image("assets/FieldFlow_logo.png", width=170)
-    except Exception:
-        pass
-    
-
-
     # Global typography / layout tweaks
     st.markdown(
         """
@@ -797,10 +885,7 @@ div[data-testid="stMetricLabel"] { font-size: 0.95rem; }
 
     # Logo at top
 
-    st.sidebar.title(APP_NAME)
-
-    st.sidebar.caption("This build saves locally (no Google/Microsoft login).")
-
+    
     with st.sidebar.expander("Calendar settings", expanded=False):
         st.selectbox(
             "Working calendar",
